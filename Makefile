@@ -36,9 +36,9 @@
 #    sources listed in MRC_SOURCES are written for MRC and get
 #    -fno-objc-arc) and links against the LibreDarwin Foundation and
 #    CoreFoundation.
-#  * The verification gates of the sibling Foundation build
-#    (pairing-sweep, behavior-gate) will be added here together with
-#    the first real sources.
+#  * Verification gates mirror the sibling Foundation build: the
+#    pairing-sweep (declared selectors must have implementations) runs
+#    as part of `all`; the behavior-gate will join it later.
 #
 #  Subproject layout: one *.subproj directory per AppKit class family,
 #  mirroring the family groupings of the porting references (NeXTSrc,
@@ -90,9 +90,17 @@ LDFLAGS = -dynamiclib -fobjc-arc -isysroot ${RN} \
           -framework Foundation -framework CoreFoundation \
           -install_name @rpath/AppKit.framework/Versions/A/AppKit
 
-.PHONY: all release umbrella clean gitignore
+.PHONY: all verify pairing-sweep release umbrella clean gitignore
 
-all: release
+all: release verify
+
+verify: pairing-sweep
+
+# Every selector declared in a public header must be implemented somewhere
+# in the .m sources; see Tests/pairing_sweep.py for the contract (including
+# what it deliberately does not require).
+pairing-sweep:
+	@cd ${.CURDIR} && python3 Tests/pairing_sweep.py .
 
 # =====================================================================
 #  Umbrella header: copied from the subprojects' own headers and
