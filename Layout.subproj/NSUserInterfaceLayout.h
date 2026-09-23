@@ -26,20 +26,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSAccessibilityProtocols.h — placeholder for LibreDarwin's AppKit
- * reimplementation. NSResponder.h and NSApplication.h import this header;
- * the NSAccessibility/NSAccessibilityElement protocol surfaces land with
- * Accessibility.subproj. Kept minimal so headers that reference these
- * conformances still compile. */
-#ifndef _NSACCESSIBILITYPROTOCOLS_H
-#define _NSACCESSIBILITYPROTOCOLS_H
+/* NSUserInterfaceLayout.h — LibreDarwin reimplementation of Apple's AppKit
+ * NSUserInterfaceLayout.h: the application-wide layout direction/orientation
+ * enums used by the bi-directional-user-interface support. */
+#ifndef _NSUSERINTERFACELAYOUT_H
+#define _NSUSERINTERFACELAYOUT_H
 
 #import <Foundation/NSObject.h>
 
-@protocol NSAccessibility <NSObject>
-@end
+typedef NS_ENUM(NSInteger, NSUserInterfaceLayoutDirection) {
+    NSUserInterfaceLayoutDirectionLeftToRight = 0,
+    NSUserInterfaceLayoutDirectionRightToLeft = 1
+};
 
-@protocol NSAccessibilityElement <NSObject>
-@end
+typedef NS_ENUM(NSInteger, NSUserInterfaceLayoutOrientation) {
+    NSUserInterfaceLayoutOrientationHorizontal = 0,
+    NSUserInterfaceLayoutOrientationVertical = 1
+} /* macos(10.9) */;
 
-#endif /* _NSACCESSIBILITYPROTOCOLS_H */
+#endif /* _NSUSERINTERFACELAYOUT_H */

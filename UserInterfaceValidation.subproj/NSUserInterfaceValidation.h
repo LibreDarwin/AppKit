@@ -26,20 +26,40 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSAccessibilityProtocols.h — placeholder for LibreDarwin's AppKit
- * reimplementation. NSResponder.h and NSApplication.h import this header;
- * the NSAccessibility/NSAccessibilityElement protocol surfaces land with
- * Accessibility.subproj. Kept minimal so headers that reference these
- * conformances still compile. */
-#ifndef _NSACCESSIBILITYPROTOCOLS_H
-#define _NSACCESSIBILITYPROTOCOLS_H
+/* NSUserInterfaceValidation.h — LibreDarwin reimplementation of Apple's
+ * AppKit NSUserInterfaceValidation.h: the protocols backing AppKit's
+ * standard UI-validation mechanism. A validated object (menu item, toolbar
+ * item, ...) asks its validator how it feels about the item; the validator
+ * is found through -[NSApplication targetForAction:to:from:]. */
+#ifndef _NSUSERINTERFACEVALIDATION_H
+#define _NSUSERINTERFACEVALIDATION_H
 
 #import <Foundation/NSObject.h>
+#import <Foundation/NSObjCRuntime.h>
 
-@protocol NSAccessibility <NSObject>
+NS_ASSUME_NONNULL_BEGIN
+
+@class NSMenuItem;
+
+/* Protocol implemented by validated objects */
+@protocol NSValidatedUserInterfaceItem
+@property (readonly, nullable) SEL action;
+@property (readonly) NSInteger tag;
 @end
 
-@protocol NSAccessibilityElement <NSObject>
+/* Protocol implemented by validator objects */
+@protocol NSUserInterfaceValidations
+- (BOOL)validateUserInterfaceItem:(id <NSValidatedUserInterfaceItem>)item;
 @end
 
-#endif /* _NSACCESSIBILITYPROTOCOLS_H */
+/* Protocol implemented by validators of menu items. On Apple's AppKit this
+ * lives in NSMenuItem.h; it is seeded here (with @class NSMenuItem) because
+ * NSApplication.h already conforms to it and NSMenuItem.subproj does not
+ * exist yet. */
+@protocol NSMenuItemValidation
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem;
+@end
+
+NS_ASSUME_NONNULL_END
+
+#endif /* _NSUSERINTERFACEVALIDATION_H */

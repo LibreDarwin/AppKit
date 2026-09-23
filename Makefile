@@ -108,7 +108,7 @@ pairing-sweep:
 # =====================================================================
 umbrella: build/gen/AppKit/AppKit.h
 
-build/gen/AppKit/AppKit.h:
+build/gen/AppKit/AppKit.h: ${HDRS}
 	@mkdir -p build/gen/AppKit
 	@rm -f $@
 	@for h in ${HDRS}; do hb="$${h##*/}"; cp "$$h" build/gen/AppKit/; done

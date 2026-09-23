@@ -26,20 +26,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSAccessibilityProtocols.h — placeholder for LibreDarwin's AppKit
- * reimplementation. NSResponder.h and NSApplication.h import this header;
- * the NSAccessibility/NSAccessibilityElement protocol surfaces land with
- * Accessibility.subproj. Kept minimal so headers that reference these
- * conformances still compile. */
-#ifndef _NSACCESSIBILITYPROTOCOLS_H
-#define _NSACCESSIBILITYPROTOCOLS_H
+/* NSPrintInfo.h — minimal seed for LibreDarwin's AppKit reimplementation.
+ * NSPrintInfoAttributeKey is the only piece NSApplication.h needs at
+ * compile time today; the NSPrintInfo class grows with Print.subproj. */
+#ifndef _NSPRINTINFO_H
+#define _NSPRINTINFO_H
 
 #import <Foundation/NSObject.h>
 
-@protocol NSAccessibility <NSObject>
-@end
+typedef NSString * NSPrintInfoAttributeKey;
 
-@protocol NSAccessibilityElement <NSObject>
-@end
+@class NSPrintInfo, NSPrintOperation;
 
-#endif /* _NSACCESSIBILITYPROTOCOLS_H */
+#endif /* _NSPRINTINFO_H */

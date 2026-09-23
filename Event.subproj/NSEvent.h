@@ -26,16 +26,20 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSEvent.h — minimal seed for LibreDarwin's AppKit reimplementation.
- * This is a deliberately small first slice of the public NSEvent interface:
- * just enough surface for NSResponder and friends to compile against. The
- * rest of NSEvent (event subclasses, NSEventType, NSEventModifierFlags,
- * window/coordinates, etc.) lands with Event.subproj. The constants below
- * are ABI-mandated values that must not change. */
+/* NSEvent.h — LibreDarwin reimplementation of Apple's AppKit NSEvent.h.
+ * The constants below are ABI-mandated values (event type ids, event-mask
+ * bits, device-independent modifier-flag bits, and the function-key
+ * unicodes) and must not change; sources written against the system AppKit
+ * depend on them. Availability annotations are recorded in comments rather
+ * than spelled with macros. The NSEvent class interface carries only the
+ * accessors the framework needs at compile time today; the full event
+ * surface lands with Event.subproj. */
 #ifndef _NSEVENT_H
 #define _NSEVENT_H
 
 #import <Foundation/NSObject.h>
+
+@class NSWindow, NSGraphicsContext, NSTrackingArea;
 
 typedef NS_ENUM(NSInteger, NSEventGestureAxis) {
     NSEventGestureAxisNone = 0,
@@ -119,7 +123,190 @@ enum {
     NSModeSwitchFunctionKey = 0xF747,
 };
 
+typedef NS_ENUM(NSUInteger, NSEventType) {        /* various types of events */
+    NSEventTypeLeftMouseDown             = 1,
+    NSEventTypeLeftMouseUp               = 2,
+    NSEventTypeRightMouseDown            = 3,
+    NSEventTypeRightMouseUp              = 4,
+    NSEventTypeMouseMoved                = 5,
+    NSEventTypeLeftMouseDragged          = 6,
+    NSEventTypeRightMouseDragged         = 7,
+    NSEventTypeMouseEntered              = 8,
+    NSEventTypeMouseExited               = 9,
+    NSEventTypeKeyDown                   = 10,
+    NSEventTypeKeyUp                     = 11,
+    NSEventTypeFlagsChanged              = 12,
+    NSEventTypeAppKitDefined             = 13,
+    NSEventTypeSystemDefined             = 14,
+    NSEventTypeApplicationDefined        = 15,
+    NSEventTypePeriodic                  = 16,
+    NSEventTypeCursorUpdate              = 17,
+    NSEventTypeScrollWheel               = 22,
+    NSEventTypeTabletPoint               = 23,
+    NSEventTypeTabletProximity           = 24,
+    NSEventTypeOtherMouseDown            = 25,
+    NSEventTypeOtherMouseUp              = 26,
+    NSEventTypeOtherMouseDragged         = 27,
+    /* The following event types are available on some hardware on 10.5.2 and later */
+    NSEventTypeGesture API_AVAILABLE(macos(10.5))       = 29,
+    NSEventTypeMagnify API_AVAILABLE(macos(10.5))       = 30,
+    NSEventTypeSwipe   API_AVAILABLE(macos(10.5))       = 31,
+    NSEventTypeRotate  API_AVAILABLE(macos(10.5))       = 18,
+    NSEventTypeBeginGesture API_AVAILABLE(macos(10.5))  = 19,
+    NSEventTypeEndGesture API_AVAILABLE(macos(10.5))    = 20,
+
+    NSEventTypeSmartMagnify API_AVAILABLE(macos(10.8)) = 32,
+    NSEventTypeQuickLook API_AVAILABLE(macos(10.8)) = 33,
+
+    NSEventTypePressure API_AVAILABLE(macos(10.10.3)) = 34,
+    NSEventTypeDirectTouch API_AVAILABLE(macos(10.10)) = 37,
+
+    NSEventTypeChangeMode API_AVAILABLE(macos(10.15)) = 38,
+
+    NSEventTypeMouseCancelled API_AVAILABLE(macos(26.0)) = 40,
+};
+
+/* Deprecated 10.12 synonyms for the NSEventType constants. */
+static const NSEventType NSLeftMouseDown       = NSEventTypeLeftMouseDown;
+static const NSEventType NSLeftMouseUp         = NSEventTypeLeftMouseUp;
+static const NSEventType NSRightMouseDown      = NSEventTypeRightMouseDown;
+static const NSEventType NSRightMouseUp        = NSEventTypeRightMouseUp;
+static const NSEventType NSMouseMoved          = NSEventTypeMouseMoved;
+static const NSEventType NSLeftMouseDragged    = NSEventTypeLeftMouseDragged;
+static const NSEventType NSRightMouseDragged   = NSEventTypeRightMouseDragged;
+static const NSEventType NSMouseEntered        = NSEventTypeMouseEntered;
+static const NSEventType NSMouseExited         = NSEventTypeMouseExited;
+static const NSEventType NSKeyDown             = NSEventTypeKeyDown;
+static const NSEventType NSKeyUp               = NSEventTypeKeyUp;
+static const NSEventType NSFlagsChanged        = NSEventTypeFlagsChanged;
+static const NSEventType NSAppKitDefined       = NSEventTypeAppKitDefined;
+static const NSEventType NSSystemDefined       = NSEventTypeSystemDefined;
+static const NSEventType NSApplicationDefined  = NSEventTypeApplicationDefined;
+static const NSEventType NSPeriodic            = NSEventTypePeriodic;
+static const NSEventType NSCursorUpdate        = NSEventTypeCursorUpdate;
+static const NSEventType NSScrollWheel         = NSEventTypeScrollWheel;
+static const NSEventType NSTabletPoint         = NSEventTypeTabletPoint;
+static const NSEventType NSTabletProximity     = NSEventTypeTabletProximity;
+static const NSEventType NSOtherMouseDown      = NSEventTypeOtherMouseDown;
+static const NSEventType NSOtherMouseUp        = NSEventTypeOtherMouseUp;
+static const NSEventType NSOtherMouseDragged   = NSEventTypeOtherMouseDragged;
+
+/* For APIs introduced in Mac OS X 10.6 and later, this type is used with
+ * NS*Mask constants to indicate the events of interest. */
+typedef NS_OPTIONS(unsigned long long, NSEventMask) { /* masks for the types of events */
+    NSEventMaskLeftMouseDown         = 1ULL << NSEventTypeLeftMouseDown,
+    NSEventMaskLeftMouseUp           = 1ULL << NSEventTypeLeftMouseUp,
+    NSEventMaskRightMouseDown        = 1ULL << NSEventTypeRightMouseDown,
+    NSEventMaskRightMouseUp          = 1ULL << NSEventTypeRightMouseUp,
+    NSEventMaskMouseMoved            = 1ULL << NSEventTypeMouseMoved,
+    NSEventMaskLeftMouseDragged      = 1ULL << NSEventTypeLeftMouseDragged,
+    NSEventMaskRightMouseDragged     = 1ULL << NSEventTypeRightMouseDragged,
+    NSEventMaskMouseEntered          = 1ULL << NSEventTypeMouseEntered,
+    NSEventMaskMouseExited           = 1ULL << NSEventTypeMouseExited,
+    NSEventMaskKeyDown               = 1ULL << NSEventTypeKeyDown,
+    NSEventMaskKeyUp                 = 1ULL << NSEventTypeKeyUp,
+    NSEventMaskFlagsChanged          = 1ULL << NSEventTypeFlagsChanged,
+    NSEventMaskAppKitDefined         = 1ULL << NSEventTypeAppKitDefined,
+    NSEventMaskSystemDefined         = 1ULL << NSEventTypeSystemDefined,
+    NSEventMaskApplicationDefined    = 1ULL << NSEventTypeApplicationDefined,
+    NSEventMaskPeriodic              = 1ULL << NSEventTypePeriodic,
+    NSEventMaskCursorUpdate          = 1ULL << NSEventTypeCursorUpdate,
+    NSEventMaskScrollWheel           = 1ULL << NSEventTypeScrollWheel,
+    NSEventMaskTabletPoint           = 1ULL << NSEventTypeTabletPoint,
+    NSEventMaskTabletProximity       = 1ULL << NSEventTypeTabletProximity,
+    NSEventMaskOtherMouseDown        = 1ULL << NSEventTypeOtherMouseDown,
+    NSEventMaskOtherMouseUp          = 1ULL << NSEventTypeOtherMouseUp,
+    NSEventMaskOtherMouseDragged     = 1ULL << NSEventTypeOtherMouseDragged,
+    /* The following event masks are available on some hardware on 10.5.2 and later */
+    NSEventMaskGesture API_AVAILABLE(macos(10.5))          = 1ULL << NSEventTypeGesture,
+    NSEventMaskMagnify API_AVAILABLE(macos(10.5))          = 1ULL << NSEventTypeMagnify,
+    NSEventMaskSwipe API_AVAILABLE(macos(10.5))            = 1ULL << NSEventTypeSwipe,
+    NSEventMaskRotate API_AVAILABLE(macos(10.5))           = 1ULL << NSEventTypeRotate,
+    NSEventMaskBeginGesture API_AVAILABLE(macos(10.5))     = 1ULL << NSEventTypeBeginGesture,
+    NSEventMaskEndGesture API_AVAILABLE(macos(10.5))       = 1ULL << NSEventTypeEndGesture,
+
+    /* Note: You can only use these event masks on 64 bit. In other words,
+     * you cannot setup a local, nor global, event monitor for these event
+     * types on 32 bit. Also, you cannot search the event queue for them
+     * (nextEventMatchingMask:...) on 32 bit. */
+    NSEventMaskSmartMagnify API_AVAILABLE(macos(10.8)) = 1ULL << NSEventTypeSmartMagnify,
+    NSEventMaskPressure API_AVAILABLE(macos(10.10.3)) = 1ULL << NSEventTypePressure,
+    NSEventMaskDirectTouch API_AVAILABLE(macos(10.12.2)) = 1ULL << NSEventTypeDirectTouch,
+
+    NSEventMaskChangeMode API_AVAILABLE(macos(10.15)) = 1ULL << NSEventTypeChangeMode,
+
+    NSEventMaskMouseCancelled API_AVAILABLE(macos(26.0)) = 1ULL << NSEventTypeMouseCancelled,
+
+    NSEventMaskAny              = NSUIntegerMax,
+};
+
+/* Deprecated 10.12 synonyms for the NSEventMask constants. */
+static const NSEventMask NSLeftMouseDownMask       = NSEventMaskLeftMouseDown;
+static const NSEventMask NSLeftMouseUpMask         = NSEventMaskLeftMouseUp;
+static const NSEventMask NSRightMouseDownMask      = NSEventMaskRightMouseDown;
+static const NSEventMask NSRightMouseUpMask        = NSEventMaskRightMouseUp;
+static const NSEventMask NSMouseMovedMask          = NSEventMaskMouseMoved;
+static const NSEventMask NSLeftMouseDraggedMask    = NSEventMaskLeftMouseDragged;
+static const NSEventMask NSRightMouseDraggedMask   = NSEventMaskRightMouseDragged;
+static const NSEventMask NSMouseEnteredMask        = NSEventMaskMouseEntered;
+static const NSEventMask NSMouseExitedMask         = NSEventMaskMouseExited;
+static const NSEventMask NSKeyDownMask             = NSEventMaskKeyDown;
+static const NSEventMask NSKeyUpMask               = NSEventMaskKeyUp;
+static const NSEventMask NSFlagsChangedMask        = NSEventMaskFlagsChanged;
+static const NSEventMask NSAppKitDefinedMask       = NSEventMaskAppKitDefined;
+static const NSEventMask NSSystemDefinedMask       = NSEventMaskSystemDefined;
+static const NSEventMask NSApplicationDefinedMask  = NSEventMaskApplicationDefined;
+static const NSEventMask NSPeriodicMask            = NSEventMaskPeriodic;
+static const NSEventMask NSCursorUpdateMask        = NSEventMaskCursorUpdate;
+static const NSEventMask NSScrollWheelMask         = NSEventMaskScrollWheel;
+static const NSEventMask NSTabletPointMask         = NSEventMaskTabletPoint;
+static const NSEventMask NSTabletProximityMask     = NSEventMaskTabletProximity;
+static const NSEventMask NSOtherMouseDownMask      = NSEventMaskOtherMouseDown;
+static const NSEventMask NSOtherMouseUpMask        = NSEventMaskOtherMouseUp;
+static const NSEventMask NSOtherMouseDraggedMask   = NSEventMaskOtherMouseDragged;
+static const NSEventMask NSAnyEventMask            = NSUIntegerMax;
+
+NS_INLINE NSEventMask NSEventMaskFromType(NSEventType type) { return (1UL << type); }
+
+/* Device-independent bits found in event modifier flags */
+typedef NS_OPTIONS(NSUInteger, NSEventModifierFlags) {
+    NSEventModifierFlagCapsLock           = 1 << 16, // Set if Caps Lock key is pressed.
+    NSEventModifierFlagShift              = 1 << 17, // Set if Shift key is pressed.
+    NSEventModifierFlagControl            = 1 << 18, // Set if Control key is pressed.
+    NSEventModifierFlagOption             = 1 << 19, // Set if Option or Alternate key is pressed.
+    NSEventModifierFlagCommand            = 1 << 20, // Set if Command key is pressed.
+    NSEventModifierFlagNumericPad         = 1 << 21, // Set if any key in the numeric keypad is pressed.
+    NSEventModifierFlagHelp               = 1 << 22, // Set if the Help key is pressed.
+    NSEventModifierFlagFunction           = 1 << 23, // Set if any function key is pressed.
+
+    // Used to retrieve only the device-independent modifier flags, allowing
+    // applications to mask off the device-dependent modifier flags,
+    // including event coalescing information.
+    NSEventModifierFlagDeviceIndependentFlagsMask    = 0xffff0000UL
+};
+
+/* Deprecated 10.12 synonyms for the NSEventModifierFlags constants. */
+static const NSEventModifierFlags NSAlphaShiftKeyMask                   = NSEventModifierFlagCapsLock;
+static const NSEventModifierFlags NSShiftKeyMask                        = NSEventModifierFlagShift;
+static const NSEventModifierFlags NSControlKeyMask                      = NSEventModifierFlagControl;
+static const NSEventModifierFlags NSAlternateKeyMask                    = NSEventModifierFlagOption;
+static const NSEventModifierFlags NSCommandKeyMask                      = NSEventModifierFlagCommand;
+static const NSEventModifierFlags NSNumericPadKeyMask                   = NSEventModifierFlagNumericPad;
+static const NSEventModifierFlags NSHelpKeyMask                         = NSEventModifierFlagHelp;
+static const NSEventModifierFlags NSFunctionKeyMask                     = NSEventModifierFlagFunction;
+static const NSEventModifierFlags NSDeviceIndependentModifierFlagsMask  = NSEventModifierFlagDeviceIndependentFlagsMask;
+
+/* The accessors below are the subset the rest of the framework relies on at
+ * compile time today (NSApplication in particular). The full NSEvent
+ * surface — coordinates, deltaY, key codes, characters, event subtypes,
+ * etc. — grows with Event.subproj. */
 @interface NSEvent : NSObject
+
+@property (readonly) NSEventType type;
+@property (nullable, readonly, unsafe_unretained) NSWindow *window;
+@property (readonly) NSEventModifierFlags modifierFlags;
+@property (nullable, readonly, copy) NSString *charactersIgnoringModifiers;
+
 @end
 
 #endif /* _NSEVENT_H */

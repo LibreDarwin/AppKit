@@ -43,4 +43,12 @@
 #define APPKIT_PRIVATE       __attribute__((visibility("hidden")))
 #endif
 
+/* NS_NOESCAPE normally comes from Foundation's NSObjCRuntime.h; the
+ * LibreDarwin Foundation snapshot this framework builds against does not
+ * ship it yet, so provide the guarded fallback here (AppKit headers use it on
+ * block parameters). */
+#ifndef NS_NOESCAPE
+#define NS_NOESCAPE __attribute__((noescape))
+#endif
+
 #endif /* _APPKITDEFINES_H */

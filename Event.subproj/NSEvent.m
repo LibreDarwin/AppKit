@@ -26,20 +26,35 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSAccessibilityProtocols.h — placeholder for LibreDarwin's AppKit
- * reimplementation. NSResponder.h and NSApplication.h import this header;
- * the NSAccessibility/NSAccessibilityElement protocol surfaces land with
- * Accessibility.subproj. Kept minimal so headers that reference these
- * conformances still compile. */
-#ifndef _NSACCESSIBILITYPROTOCOLS_H
-#define _NSACCESSIBILITYPROTOCOLS_H
+/* NSEvent.m — minimal internal storage for the event accessors declared in
+ * NSEvent.h. Events on Apple's AppKit cannot be allocated directly; they
+ * are created by the window/server-equivalent machinery that lands with the
+ * event dispatch work. Until then the accessors below back plain objects so
+ * callers (and tests) can subclass NSEvent to drive the event path. */
 
-#import <Foundation/NSObject.h>
+#import <AppKit/NSEvent.h>
 
-@protocol NSAccessibility <NSObject>
+@implementation NSEvent {
+    NSEventType _type;
+    __unsafe_unretained NSWindow *_window;
+    NSEventModifierFlags _modifierFlags;
+    NSString *_charactersIgnoringModifiers;
+}
+
+- (NSEventType)type {
+    return _type;
+}
+
+- (NSWindow *)window {
+    return _window;
+}
+
+- (NSEventModifierFlags)modifierFlags {
+    return _modifierFlags;
+}
+
+- (NSString *)charactersIgnoringModifiers {
+    return _charactersIgnoringModifiers;
+}
+
 @end
-
-@protocol NSAccessibilityElement <NSObject>
-@end
-
-#endif /* _NSACCESSIBILITYPROTOCOLS_H */
