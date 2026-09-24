@@ -34,6 +34,7 @@
 #import <Foundation/NSString.h>
 #import <objc/message.h>
 #import <string.h>
+#import <strings.h>
 
 /* Equality is spelled textually: the minimal Foundation's NSString exposes
  * -length/-characterAtIndex:/-UTF8String but no -isEqualToString:. Only the
@@ -312,8 +313,87 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-    /* FIXME(macos): key-equivalent matching walks the menu tree and needs
-     * modifier-mask handling once key events reach the app loop. */
+    if (_autoenablesItems) {
+        [self update];
+    }
+
+    NSEventModifierFlags flags = [event modifierFlags];
+    NSString *characters = [event charactersIgnoringModifiers];
+    if (characters == nil) {
+        return NO;
+    }
+
+    /* Pass 1: an item that hosts a submenu lets that submenu try first, so a
+     * shortcut on a deeper item beats one on the item that owns the submenu.
+     * This is what lets menu-bar trees honor a duplicated command. */
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        NSMenuItem *item = [_itemArray objectAtIndex:i];
+        if ([item isHidden] || ![item isEnabled]) {
+            continue;
+        }
+        if ([item submenu] != nil && [[item submenu] performKeyEquivalent:event]) {
+            return YES;
+        }
+    }
+
+    /* Pass 2: reverse scan, so a later plain item beats an earlier one with
+     * the same keystroke. Menu-bar duplicates put the "master" key on the
+     * front item and the sourced variant later; AppKit's table prefers the
+     * last match, and so do we. */
+    for (NSInteger i = count - 1; i >= 0; i--) {
+        NSMenuItem *item = [_itemArray objectAtIndex:i];
+        NSString *keyEquivalent = [item keyEquivalent];
+        if (keyEquivalent == nil || [keyEquivalent length] == 0 ||
+            [item isHidden] || ![item isEnabled] || [item hasSubmenu]) {
+            continue;
+        }
+
+        NSUInteger mask = [item keyEquivalentModifierMask];
+        if (mask == 0) {
+            /* Init-with-key-equivalent defaults to Command, matching Apple. */
+            mask = NSCommandKeyMask;
+        }
+        if ((flags & mask) != mask) {
+            continue;
+        }
+        if (!_LDMenuKeyEquivalentMatches(characters, keyEquivalent)) {
+            continue;
+        }
+
+        return _LDMenuExecuteItem(item);
+    }
+    return NO;
+}
+
+/* Key equivalents are single characters. Compare the event's (modifier-free)
+ * character against the item's key-equivalent string case-insensitively, like
+ * the system kit does; key equivalents are ASCII in practice, so a byte-wise
+ * comparison is exact. */
+/* Compare the event's (modifier-free) character against the item's
+ * key-equivalent string case-insensitively, like the system kit does; key
+ * equivalents are ASCII in practice, so a byte-wise comparison is exact. */
+static BOOL _LDMenuKeyEquivalentMatches(NSString *characters, NSString *keyEquivalent) {
+    return strcasecmp([characters UTF8String], [keyEquivalent UTF8String]) == 0;
+}
+
+static BOOL _LDMenuExecuteItem(NSMenuItem *item) {
+    SEL action = [item action];
+    if (action == NULL) {
+        return NO;
+    }
+    id target = [item target];
+    /* objc_msgSend with a typed cast avoids the ARC unknown-selector leak
+     * warning; the receiver is always an object. */
+    void (*sendAction)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
+    if (target != nil && [target respondsToSelector:action]) {
+        sendAction(target, action, item);
+        return YES;
+    }
+    if ([NSApp respondsToSelector:action]) {
+        sendAction(NSApp, action, item);
+        return YES;
+    }
     return NO;
 }
 
@@ -322,20 +402,8 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
 
 - (void)performActionForItemAtIndex:(NSInteger)index {
     NSMenuItem *item = [self itemAtIndex:index];
-    if (item == nil) {
-        return;
-    }
-    SEL action = [item action];
-    id target = [item target];
-    if (action != NULL) {
-        /* objc_msgSend with a typed cast avoids the ARC unknown-selector
-         * leak warning; the receiver is always an object. */
-        void (*sendAction)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
-        if (target != nil && [target respondsToSelector:action]) {
-            sendAction(target, action, item);
-        } else if ([NSApp respondsToSelector:action]) {
-            sendAction(NSApp, action, item);
-        }
+    if (item != nil) {
+        _LDMenuExecuteItem(item);
     }
 }
 
