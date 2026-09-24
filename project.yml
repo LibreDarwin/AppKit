@@ -42,6 +42,8 @@ targets:
       base:
         SDKROOT: /Users/sunneva/xnuports-root/devel/xcode-tools/build/release/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.Internal.sdk
         MACOSX_DEPLOYMENT_TARGET: "26.5"
+        ARCHS:
+          - arm64
         CLANG_ENABLE_OBJC_ARC: YES
         CLANG_ENABLE_MODULES: NO
         DEFINES_MODULE: NO

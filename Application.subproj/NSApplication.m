@@ -38,10 +38,12 @@
  * resolution, UI validation, and modal sessions all work without a display. */
 
 #import <AppKit/NSApplication.h>
+#import <AppKit/NSApplication_Private.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSGraphics.h>
 #import <AppKit/NSPasteboard.h>
 #import <AppKit/NSPrintInfo.h>
+#import <AppKit/NSWindow.h>
 #import <Foundation/NSArray.h>
 #import <Foundation/NSBundle.h>
 #import <Foundation/NSDate.h>
@@ -197,8 +199,6 @@
 }
 
 - (void)_setActive:(BOOL)active;
-- (void)_registerWindow:(NSWindow *)window;
-- (void)_unregisterWindow:(NSWindow *)window;
 - (void)_reallyTerminate;
 - (void)_postTerminationMarker;
 - (NSEvent *)_nextQueuedEventMatchingMask:(NSEventMask)mask inMode:(NSRunLoopMode)mode dequeue:(BOOL)deqFlag;
@@ -481,12 +481,7 @@ static NSDate *LBSAppKitFarFuture(void)
     }
     for (NSUInteger i = 0; i < [_windows count]; i++) {
         NSWindow *window = [_windows objectAtIndex:i];
-        if (![(id)window respondsToSelector:@selector(windowNumber)]) {
-            continue;
-        }
-        id (*getNumber)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
-        NSInteger number = (NSInteger)getNumber(window, @selector(windowNumber));
-        if (number == windowNum) {
+        if (window != nil && [window windowNumber] == windowNum) {
             return window;
         }
     }
@@ -554,34 +549,6 @@ static NSDate *LBSAppKitFarFuture(void)
 - (void)preventWindowOrdering
 {
     /* FIXME(macos). */
-}
-
-- (void)_registerWindow:(NSWindow *)window
-{
-    if (window != nil && ![_windows containsObject:window]) {
-        [_windows addObject:window];
-        if (_windowsMenu != nil && [(id)_windowsMenu respondsToSelector:@selector(addItemWithTitle:action:keyEquivalent:)]) {
-            /* FIXME(macos): add a Window-menu row once Menu.subproj lands. */
-        }
-    }
-}
-
-- (void)_unregisterWindow:(NSWindow *)window
-{
-    if (window != nil) {
-        for (NSUInteger i = [_windows count]; i > 0; i--) {
-            if ([_windows objectAtIndex:i - 1] == window) {
-                [_windows removeObjectAtIndex:i - 1];
-                break;
-            }
-        }
-    }
-    if (_mainWindow == window) {
-        _mainWindow = nil;
-    }
-    if (_keyWindow == window) {
-        _keyWindow = nil;
-    }
 }
 
 #pragma mark - Menus
@@ -1080,6 +1047,52 @@ static NSDate *LBSAppKitFarFuture(void)
         [remaining addObject:entry];
     }
     _dispatchTable = remaining;
+}
+
+@end
+
+/* ------------------------------------------------------------------ */
+/*  NSApplication (LBSWindowPrivate) — window registry + key/main      */
+/* ------------------------------------------------------------------ */
+
+@implementation NSApplication (LBSWindowPrivate)
+
+- (void)_lbsRegisterWindow:(NSWindow *)window
+{
+    if (window != nil && ![_windows containsObject:window]) {
+        [_windows addObject:window];
+        if (_windowsMenu != nil && [(id)_windowsMenu respondsToSelector:@selector(addItemWithTitle:action:keyEquivalent:)]) {
+            /* FIXME(macos): add a Window-menu row once Menu.subproj lands. */
+        }
+    }
+}
+
+- (void)_lbsUnregisterWindow:(NSWindow *)window
+{
+    if (window != nil) {
+        for (NSUInteger i = [_windows count]; i > 0; i--) {
+            if ([_windows objectAtIndex:i - 1] == window) {
+                [_windows removeObjectAtIndex:i - 1];
+                break;
+            }
+        }
+    }
+    if (_mainWindow == window) {
+        _mainWindow = nil;
+    }
+    if (_keyWindow == window) {
+        _keyWindow = nil;
+    }
+}
+
+- (void)_lbsSetMainWindow:(NSWindow *)window
+{
+    _mainWindow = window;
+}
+
+- (void)_lbsSetKeyWindow:(NSWindow *)window
+{
+    _keyWindow = window;
 }
 
 @end
