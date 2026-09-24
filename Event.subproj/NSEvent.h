@@ -37,9 +37,13 @@
 #ifndef _NSEVENT_H
 #define _NSEVENT_H
 
+#import <Foundation/NSDate.h>
+#import <Foundation/NSGeometry.h>
 #import <Foundation/NSObject.h>
 
 @class NSWindow, NSGraphicsContext, NSTrackingArea;
+
+NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, NSEventGestureAxis) {
     NSEventGestureAxisNone = 0,
@@ -296,17 +300,79 @@ static const NSEventModifierFlags NSHelpKeyMask                         = NSEven
 static const NSEventModifierFlags NSFunctionKeyMask                     = NSEventModifierFlagFunction;
 static const NSEventModifierFlags NSDeviceIndependentModifierFlagsMask  = NSEventModifierFlagDeviceIndependentFlagsMask;
 
-/* The accessors below are the subset the rest of the framework relies on at
- * compile time today (NSApplication in particular). The full NSEvent
- * surface — coordinates, deltaY, key codes, characters, event subtypes,
- * etc. — grows with Event.subproj. */
+/* Event objects are created with the factory methods below, matching the
+ * system AppKit. All accessors are plain stored values (there is no window
+ * server or input backend yet), so the full mouse/key/other surface is
+ * available to framework code and tests immediately. */
 @interface NSEvent : NSObject
 
 @property (readonly) NSEventType type;
 @property (nullable, readonly, unsafe_unretained) NSWindow *window;
+@property (readonly) NSInteger windowNumber;
 @property (readonly) NSEventModifierFlags modifierFlags;
+@property (readonly) NSPoint locationInWindow;
+@property (nullable, readonly, copy) NSString *characters;
 @property (nullable, readonly, copy) NSString *charactersIgnoringModifiers;
+@property (getter=isARepeat, readonly) BOOL aRepeat;
+@property (readonly) unsigned short keyCode;
+@property (readonly) NSInteger clickCount;
+@property (readonly) NSInteger buttonNumber;
+@property (readonly) float pressure;
+@property (readonly) NSTimeInterval timestamp;
+@property (readonly) NSInteger eventNumber;
+@property (readonly) short subtype;
+@property (readonly) CGFloat deltaX;
+@property (readonly) CGFloat deltaY;
+@property (readonly) CGFloat deltaZ;
+@property (readonly, getter=isDirectionInvertedFromDevice) BOOL directionInvertedFromDevice;
+@property (readonly) NSInteger data1;
+@property (readonly) NSInteger data2;
+@property (readonly) NSInteger trackingNumber;
+@property (nullable, readonly) void *userData;
+
++ (NSEvent *)mouseEventWithType:(NSEventType)type
+                       location:(NSPoint)location
+                  modifierFlags:(NSEventModifierFlags)flags
+                      timestamp:(NSTimeInterval)time
+                   windowNumber:(NSInteger)windowNum
+                        context:(nullable NSGraphicsContext *)context
+                    eventNumber:(NSInteger)eventNum
+                     clickCount:(NSInteger)clickCount
+                       pressure:(float)pressure;
+
++ (NSEvent *)keyEventWithType:(NSEventType)type
+                     location:(NSPoint)location
+                modifierFlags:(NSEventModifierFlags)flags
+                    timestamp:(NSTimeInterval)time
+                 windowNumber:(NSInteger)windowNum
+                      context:(nullable NSGraphicsContext *)context
+                   characters:(NSString *)chars
+      charactersIgnoringModifiers:(NSString *)charsIgnoringModifiers
+                    isARepeat:(BOOL)flag
+                      keyCode:(unsigned short)code;
+
++ (NSEvent *)otherEventWithType:(NSEventType)type
+                       location:(NSPoint)location
+                  modifierFlags:(NSEventModifierFlags)flags
+                      timestamp:(NSTimeInterval)time
+                   windowNumber:(NSInteger)windowNum
+                        context:(nullable NSGraphicsContext *)context
+                        subtype:(short)subtype
+                          data1:(NSInteger)data1
+                          data2:(NSInteger)data2;
+
++ (NSEvent *)enterExitEventWithType:(NSEventType)type
+                           location:(NSPoint)location
+                      modifierFlags:(NSEventModifierFlags)flags
+                          timestamp:(NSTimeInterval)time
+                       windowNumber:(NSInteger)windowNum
+                            context:(nullable NSGraphicsContext *)context
+                        eventNumber:(NSInteger)eventNum
+                     trackingNumber:(NSInteger)trackingNum
+                           userData:(nullable void *)userData;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif /* _NSEVENT_H */
