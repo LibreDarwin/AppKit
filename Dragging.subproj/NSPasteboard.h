@@ -37,13 +37,14 @@
 #import <Foundation/NSObject.h>
 #import <Foundation/NSArray.h>
 #import <Foundation/NSData.h>
+#import <Foundation/NSDictionary.h>
 #import <Foundation/NSString.h>
 #import <AppKit/AppKitDefines.h>
 
 typedef NSString * NSPasteboardType;
 typedef NSString * NSPasteboardName;
 
-@class NSPasteboard;
+@class NSPasteboard, NSPasteboardItem;
 
 /* Pasteboard names. The general, drag, find, font and ruler boards are the
  * named boards AppKit itself queries. */
@@ -96,6 +97,18 @@ APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeFileURL;
 - (BOOL)setData:(NSData *)data forType:(NSPasteboardType)type;
 - (BOOL)setString:(NSString *)string forType:(NSPasteboardType)type;
 - (BOOL)setPropertyList:(id)plist forType:(NSPasteboardType)type;
+
+/* Item-based access. writeObjects: takes any objects that implement
+ * NSPasteboardWriting; readObjectsForClasses:options: instantiates classes
+ * that implement NSPasteboardReading from the board's contents. */
+- (BOOL)writeObjects:(NSArray *)objects;
+- (NSArray *)readObjectsForClasses:(NSArray<Class> *)classArray options:(NSDictionary *)options;
+- (BOOL)canReadObjectForClasses:(NSArray<Class> *)classArray options:(NSDictionary *)options;
+- (BOOL)canReadItemWithDataConformingToTypes:(NSArray<NSString *> *)types;
+
+- (NSArray<NSPasteboardItem *> *)pasteboardItems;
+- (NSInteger)indexOfPasteboardItem:(NSPasteboardItem *)pasteboardItem;
+- (NSPasteboardItem *)pasteboardItemForType:(NSPasteboardType)type;
 
 @end
 
