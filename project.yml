@@ -1,0 +1,94 @@
+# AppKit.framework — Xcode project (generated from this file with xcodegen)
+#
+# Translated from the Makefile build. Key mapping:
+#   * SDKROOT        -> the LibreDarwin Internal SDK (the Makefile's -isysroot RN)
+#   * preBuild script-> the Makefile's `umbrella` target: gathers subproject
+#                       headers into build/gen/AppKit/AppKit.h so <AppKit/...>
+#                       includes resolve, then the install script copies the
+#                       generated headers into the framework's Headers dir.
+#   * OTHER_CFLAGS   -> -DNSBUILDING_APPKIT + -fblocks (ARC is on via
+#                       CLANG_ENABLE_OBJC_ARC), mirroring the Makefile flags.
+#   * OTHER_LDFLAGS  -> -framework Foundation -framework CoreFoundation from
+#                       the Internal SDK, matching the Makefile link step.
+#
+# The pairing sweep stays a Makefile gate; it is not a build phase here.
+# Regenerate the .xcodeproj after changing this file:
+#   xcodegen generate
+
+name: AppKit
+options:
+  bundleIdPrefix: org.libreDarwin
+  deploymentTarget:
+    macOS: "26.5"
+  xcodeVersion: "16.0"
+targets:
+  AppKit:
+    type: framework
+    platform: macOS
+    sources:
+      - path: .
+        excludes:
+          - build
+          - local
+          - Tests
+          - Makefile
+          - project.yml
+          - Info.plist
+          - LICENSE
+          - AppKit.xcodeproj
+          - .gitignore
+          - .DS_Store
+    settings:
+      base:
+        SDKROOT: /Users/sunneva/xnuports-root/devel/xcode-tools/build/release/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.Internal.sdk
+        MACOSX_DEPLOYMENT_TARGET: "26.5"
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_MODULES: NO
+        DEFINES_MODULE: NO
+        OTHER_CFLAGS:
+          - "-DNSBUILDING_APPKIT"
+          - "-fblocks"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/build/gen"
+          - "$(SDKROOT)/System/Library/Frameworks/Foundation.framework/Headers"
+          - "$(SDKROOT)/System/Library/Frameworks/CoreFoundation.framework/Headers"
+        PRODUCT_NAME: AppKit
+        PRODUCT_BUNDLE_IDENTIFIER: org.libreDarwin.AppKit
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ""
+        DYLIB_COMPATIBILITY_VERSION: "1"
+        DYLIB_CURRENT_VERSION: "1"
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_ALLOWED: NO
+        OTHER_LDFLAGS:
+          - "-framework Foundation"
+          - "-framework CoreFoundation"
+    preBuildScripts:
+      - name: Generate AppKit umbrella header
+        script: |
+          cd "$SRCROOT"
+          make umbrella
+        basedOnDependencyAnalysis: false
+    postBuildScripts:
+      - name: Install generated headers and Info.plist into framework
+        script: |
+          set -e
+          FRAMEWORK="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.framework"
+          mkdir -p "$FRAMEWORK/Versions/A/Headers" "$FRAMEWORK/Versions/A/Resources"
+          for h in "$SRCROOT"/build/gen/AppKit/*.h; do
+            [ -f "$h" ] && cp "$h" "$FRAMEWORK/Versions/A/Headers/"
+          done
+          cp "$SRCROOT/Info.plist" "$FRAMEWORK/Versions/A/Resources/"
+          ln -sfn A "$FRAMEWORK/Versions/Current"
+          ln -sfn Versions/Current/Headers "$FRAMEWORK/Headers"
+          ln -sfn Versions/Current/Resources "$FRAMEWORK/Resources"
+        basedOnDependencyAnalysis: false
+schemes:
+  AppKit:
+    build:
+      targets:
+        AppKit: all
+    run:
+      config: Debug
+    archive:
+      config: Release
