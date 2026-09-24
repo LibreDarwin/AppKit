@@ -27,11 +27,17 @@
  */
 
 #import <AppKit/NSMenu.h>
-#import <AppKit/NSMenuItem.h>
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSEvent.h>
 #import <Foundation/NSArray.h>
+#import <Foundation/NSCoder.h>
 #import <Foundation/NSString.h>
+#import <string.h>
+
+/* Equality is spelled textually: the minimal Foundation's NSString exposes
+ * -length/-characterAtIndex:/-UTF8String but no -isEqualToString:. Only the
+ * declared surface of this project's Foundation is used. */
+static BOOL _LDStringsEqual(NSString *left, NSString *right);
 
 @implementation NSMenu {
     NSMenu *_supermenu;
@@ -40,14 +46,13 @@
     BOOL _autoenablesItems;
     id<NSMenuDelegate> _delegate;
     CGFloat _minimumWidth;
-    CGFloat _menuBarHeight;
     NSFont *_font;
     BOOL _allowsContextMenuPlugIns;
     NSUserInterfaceLayoutDirection _userInterfaceLayoutDirection;
 }
 
 + (void)popUpContextMenu:(NSMenu *)menu withEvent:(NSEvent *)event forView:(NSView *)view {
-    /* FIXME(macos): requires window/menu window implementation */
+    /* FIXME(macos): requires window/menu-window machinery. */
 }
 
 - (instancetype)initWithTitle:(NSString *)title {
@@ -57,7 +62,6 @@
         _itemArray = [[NSMutableArray alloc] init];
         _autoenablesItems = YES;
         _minimumWidth = 0;
-        _menuBarHeight = 0;
         _allowsContextMenuPlugIns = YES;
         _userInterfaceLayoutDirection = NSUserInterfaceLayoutDirectionLeftToRight;
     }
@@ -65,25 +69,33 @@
 }
 
 - (instancetype)initWithCoder:(NSCoder *)coder {
-    return [self initWithTitle:@""];
+    self = [self initWithTitle:@""];
+    if (self) {
+        [self setTitle:[coder decodeObjectForKey:@"title"]];
+    }
+    return self;
 }
 
-- (void)dealloc {
-    _supermenu = nil;
-    _delegate = nil;
+- (void)encodeWithCoder:(NSCoder *)coder {
+    [coder encodeObject:_title forKey:@"title"];
 }
 
 - (id)copyWithZone:(NSZone *)zone {
     NSMenu *copy = [[NSMenu allocWithZone:zone] initWithTitle:_title];
-    copy.autoenablesItems = _autoenablesItems;
-    copy.minimumWidth = _minimumWidth;
-    copy.allowsContextMenuPlugIns = _allowsContextMenuPlugIns;
-    copy.userInterfaceLayoutDirection = _userInterfaceLayoutDirection;
-    copy.font = _font;
-    for (NSMenuItem *item in _itemArray) {
-        [copy addItem:[item copyWithZone:zone]];
+    [copy setAutoenablesItems:_autoenablesItems];
+    [copy setMinimumWidth:_minimumWidth];
+    [copy setAllowsContextMenuPlugIns:_allowsContextMenuPlugIns];
+    [copy setUserInterfaceLayoutDirection:_userInterfaceLayoutDirection];
+    [copy setFont:_font];
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        [copy addItem:[[_itemArray objectAtIndex:i] copyWithZone:zone]];
     }
     return copy;
+}
+
+- (void)dealloc {
+    _delegate = nil;
 }
 
 - (NSString *)title {
@@ -107,13 +119,26 @@
         return;
     }
     [newItem setMenu:self];
+    NSInteger count = (NSInteger)[_itemArray count];
     if (index < 0) {
         index = 0;
     }
-    if (index > [_itemArray count]) {
-        index = [_itemArray count];
+    if (index > count) {
+        index = count;
     }
-    [_itemArray insertObject:newItem atIndex:index];
+    NSMutableArray *rebuilt = [NSMutableArray arrayWithCapacity:count + 1];
+    NSInteger i;
+    for (i = 0; i < index; i++) {
+        [rebuilt addObject:[_itemArray objectAtIndex:i]];
+    }
+    [rebuilt addObject:newItem];
+    for (; i < count; i++) {
+        [rebuilt addObject:[_itemArray objectAtIndex:i]];
+    }
+    [_itemArray removeAllObjects];
+    for (i = 0; i < count + 1; i++) {
+        [_itemArray addObject:[rebuilt objectAtIndex:i]];
+    }
 }
 
 - (void)addItem:(NSMenuItem *)newItem {
@@ -137,11 +162,10 @@
 }
 
 - (void)removeItemAtIndex:(NSInteger)index {
-    if (index < 0 || index >= [_itemArray count]) {
+    if (index < 0 || index >= (NSInteger)[_itemArray count]) {
         return;
     }
-    NSMenuItem *item = [_itemArray objectAtIndex:index];
-    [item setMenu:nil];
+    [[_itemArray objectAtIndex:index] setMenu:nil];
     [_itemArray removeObjectAtIndex:index];
 }
 
@@ -149,9 +173,13 @@
     if (item == nil) {
         return;
     }
-    NSUInteger idx = [_itemArray indexOfObjectIdenticalTo:item];
-    if (idx != NSNotFound) {
-        [self removeItemAtIndex:(NSInteger)idx];
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        if ([_itemArray objectAtIndex:i] == item) {
+            [item setMenu:nil];
+            [_itemArray removeObjectAtIndex:i];
+            return;
+        }
     }
 }
 
@@ -162,8 +190,9 @@
 }
 
 - (void)removeAllItems {
-    for (NSMenuItem *item in [_itemArray copy]) {
-        [item setMenu:nil];
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        [[_itemArray objectAtIndex:i] setMenu:nil];
     }
     [_itemArray removeAllObjects];
 }
@@ -173,76 +202,85 @@
 }
 
 - (void)setItemArray:(NSArray<NSMenuItem *> *)itemArray {
-    [_itemArray removeAllObjects];
-    if (itemArray != nil) {
-        for (NSMenuItem *item in itemArray) {
-            [self addItem:item];
-        }
+    [self removeAllItems];
+    NSInteger count = (NSInteger)[itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        [self addItem:[itemArray objectAtIndex:i]];
     }
 }
 
 - (NSInteger)numberOfItems {
-    return [_itemArray count];
+    return (NSInteger)[_itemArray count];
 }
 
 - (NSMenuItem *)itemAtIndex:(NSInteger)index {
-    if (index < 0 || index >= [_itemArray count]) {
+    if (index < 0 || index >= (NSInteger)[_itemArray count]) {
         return nil;
     }
     return [_itemArray objectAtIndex:index];
 }
 
 - (NSInteger)indexOfItem:(NSMenuItem *)item {
-    return (NSInteger)[_itemArray indexOfObjectIdenticalTo:item];
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        if ([_itemArray objectAtIndex:i] == item) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 - (NSInteger)indexOfItemWithTitle:(NSString *)title {
-    for (NSUInteger i = 0; i < [_itemArray count]; i++) {
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
         NSMenuItem *item = [_itemArray objectAtIndex:i];
-        if ([[item title] isEqualToString:title]) {
-            return (NSInteger)i;
+        if (_LDStringsEqual([item title], title)) {
+            return i;
         }
     }
     return -1;
 }
 
 - (NSInteger)indexOfItemWithTag:(NSInteger)tag {
-    for (NSUInteger i = 0; i < [_itemArray count]; i++) {
-        NSMenuItem *item = [_itemArray objectAtIndex:i];
-        if ([item tag] == tag) {
-            return (NSInteger)i;
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        if ([[_itemArray objectAtIndex:i] tag] == tag) {
+            return i;
         }
     }
     return -1;
 }
 
 - (NSInteger)indexOfItemWithRepresentedObject:(id)object {
-    for (NSUInteger i = 0; i < [_itemArray count]; i++) {
-        NSMenuItem *item = [_itemArray objectAtIndex:i];
-        if ([[item representedObject] isEqual:object]) {
-            return (NSInteger)i;
+    /* Compared by identity: the minimal Foundation's correction for isEqual:
+     * on arbitrary represented objects is not guaranteed to reach AppKit's
+     * behavior, and identity matches how menu clients pair an object they
+     * put in with the item they get back. */
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        if ([[_itemArray objectAtIndex:i] representedObject] == object) {
+            return i;
         }
     }
     return -1;
 }
 
 - (NSInteger)indexOfItemWithSubmenu:(NSMenu *)submenu {
-    for (NSUInteger i = 0; i < [_itemArray count]; i++) {
-        NSMenuItem *item = [_itemArray objectAtIndex:i];
-        if ([item submenu] == submenu) {
-            return (NSInteger)i;
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        if ([[_itemArray objectAtIndex:i] submenu] == submenu) {
+            return i;
         }
     }
     return -1;
 }
 
 - (NSInteger)indexOfItemWithTarget:(id)target andAction:(SEL)actionSelector {
-    for (NSUInteger i = 0; i < [_itemArray count]; i++) {
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
         NSMenuItem *item = [_itemArray objectAtIndex:i];
-        if ([item target] == target) {
-            if (actionSelector == NULL || [item action] == actionSelector) {
-                return (NSInteger)i;
-            }
+        if ([item target] == target && (actionSelector == NULL || [item action] == actionSelector)) {
+            return i;
         }
     }
     return -1;
@@ -273,6 +311,8 @@
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
+    /* FIXME(macos): key-equivalent matching walks the menu tree and needs
+     * modifier-mask handling once key events reach the app loop. */
     return NO;
 }
 
@@ -304,7 +344,7 @@
 }
 
 - (CGFloat)menuBarHeight {
-    return _menuBarHeight;
+    return 0;
 }
 
 - (void)cancelTracking {
@@ -354,6 +394,16 @@
 }
 
 - (void)submenuAction:(id)sender {
+}
+
+static BOOL _LDStringsEqual(NSString *left, NSString *right) {
+    if (left == right) {
+        return YES;
+    }
+    if (left == nil || right == nil) {
+        return NO;
+    }
+    return strcmp([left UTF8String], [right UTF8String]) == 0;
 }
 
 @end

@@ -28,7 +28,7 @@
 
 #import <AppKit/NSMenuItem.h>
 #import <AppKit/NSMenu.h>
-#import <AppKit/NSImage.h>
+#import <Foundation/NSAttributedString.h>
 #import <Foundation/NSString.h>
 
 @implementation NSMenuItem {

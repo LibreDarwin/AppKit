@@ -36,10 +36,11 @@
 #import <Foundation/NSGeometry.h>
 #import <AppKit/AppKitDefines.h>
 #import <AppKit/NSMenuItem.h>
+#import <AppKit/NSUserInterfaceLayout.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class NSEvent, NSView, NSFont;
+@class NSEvent, NSView, NSFont, NSScreen;
 
 @protocol NSMenuDelegate;
 
