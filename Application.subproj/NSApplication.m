@@ -62,6 +62,9 @@
 #import <Foundation/NSUserDefaults.h>
 #import <Foundation/NSValue.h>
 #import <objc/message.h>
+#import <objc/runtime.h>
+#import <stdlib.h>
+#import <string.h>
 
 @class NSWindow;
 
@@ -1709,6 +1712,96 @@ BOOL NSShowsServicesMenuItem(NSString *itemName)
     return YES;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Module state — in-process services registry                        */
+/* ------------------------------------------------------------------ */
+
+/* On real macOS NSPerformService: routes through the services daemon's
+ * cross-process registry. LibreDarwin has no daemon, so providers signed up
+ * in-process through NSRegisterServicesProvider: are resolved by name here.
+ * The service method follows AppKit's naming convention: the service name's
+ * words, first character lower-cased and spaces removed, taken from the last
+ * path component, then :userData:error: — "Send Selection" maps to
+ * -sendSelection:userData:error:. */
+
+@interface _LBSRegisteredServiceProvider : NSObject
+@end
+
+@implementation _LBSRegisteredServiceProvider {
+@public
+    id _provider;
+    NSString *_name;
+}
+@end
+
+static NSMutableArray *_LBSRegisteredServiceProviders = nil;
+
+static NSInteger _LBSIndexForProviderName(NSString *name) {
+    if (_LBSRegisteredServiceProviders == nil || name == nil) {
+        return -1;
+    }
+    NSInteger count = (NSInteger)[_LBSRegisteredServiceProviders count];
+    for (NSInteger i = 0; i < count; i++) {
+        if (strcmp([((_LBSRegisteredServiceProvider *)[_LBSRegisteredServiceProviders objectAtIndex:i])->_name UTF8String],
+                   [name UTF8String]) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static NSInteger _LBSIndexForProviderBytes(const char *bytes, size_t length) {
+    if (_LBSRegisteredServiceProviders == nil || length == 0) {
+        return -1;
+    }
+    NSInteger count = (NSInteger)[_LBSRegisteredServiceProviders count];
+    for (NSInteger i = 0; i < count; i++) {
+        const char *name = [((_LBSRegisteredServiceProvider *)[_LBSRegisteredServiceProviders objectAtIndex:i])->_name UTF8String];
+        if (name != NULL && strlen(name) == length && strncmp(bytes, name, length) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Builds ":userData:error:" selector from the service name bytes, lower-
+ * casing the leading character and dropping spaces ("Send Selection" ->
+ * "sendSelection:userData:error:"). Returns NULL when there is nothing left
+ * to form a selector from. */
+static SEL _LBSServiceSelector(const char *bytes, size_t length) {
+    if (length == 0 || length > 512) {
+        return NULL;
+    }
+    char *buf = (char *)malloc(length + 1 + strlen(":userData:error:"));
+    if (buf == NULL) {
+        return NULL;
+    }
+    size_t j = 0;
+    BOOL capitalizeNext = NO;
+    for (size_t i = 0; i < length; i++) {
+        unsigned char c = (unsigned char)bytes[i];
+        if (c == ' ') {
+            capitalizeNext = YES;
+            continue;
+        }
+        if (j == 0 && c >= 'A' && c <= 'Z') {
+            c = (unsigned char)(c + 0x20);
+        } else if (capitalizeNext && c >= 'a' && c <= 'z') {
+            c = (unsigned char)(c - 0x20);
+        }
+        capitalizeNext = NO;
+        buf[j++] = c;
+    }
+    if (j == 0) {
+        free(buf);
+        return NULL;
+    }
+    strcpy(buf + j, ":userData:error:");
+    SEL selector = sel_registerName(buf);
+    free(buf);
+    return selector;
+}
+
 NSInteger NSSetShowsServicesMenuItem(NSString *itemName, BOOL enabled)
 {
     return 0;
@@ -1721,16 +1814,67 @@ void NSUpdateDynamicServices(void)
 
 BOOL NSPerformService(NSString *itemName, NSPasteboard *pboard)
 {
-    /* FIXME(macos): requires the services registry. */
-    return NO;
+    if (itemName == nil) {
+        return NO;
+    }
+    const char *utf = [itemName UTF8String];
+    if (utf == NULL) {
+        return NO;
+    }
+    /* Services-menu item names are "<provider>/<service>", e.g.
+     * "TextEdit/Do Selection With Enclosure". The registry is provider-
+     * scoped, so a bare service name has no host to run in. */
+    const char *slash = strrchr(utf, '/');
+    if (slash == NULL || slash == utf) {
+        return NO;
+    }
+    size_t providerLength = (size_t)(slash - utf);
+    const char *serviceBytes = slash + 1;
+    size_t serviceLength = strlen(serviceBytes);
+
+    NSInteger index = _LBSIndexForProviderBytes(utf, providerLength);
+    if (index < 0) {
+        return NO;
+    }
+    SEL action = _LBSServiceSelector(serviceBytes, serviceLength);
+    if (action == NULL) {
+        return NO;
+    }
+    _LBSRegisteredServiceProvider *entry = [_LBSRegisteredServiceProviders objectAtIndex:index];
+    if (entry->_provider == nil || ![entry->_provider respondsToSelector:action]) {
+        return NO;
+    }
+    NSString *error = nil;
+    /* objc_msgSend with a typed cast avoids the ARC unknown-selector leak
+     * warning; service methods return BOOL per the AppKit contract. */
+    BOOL (*send)(id, SEL, id, id, NSString **) = (BOOL (*)(id, SEL, id, id, NSString **))objc_msgSend;
+    return send(entry->_provider, action, pboard, nil, &error);
 }
 
 void NSRegisterServicesProvider(id provider, NSServiceProviderName name)
 {
-    /* FIXME(macos). */
+    if (provider == nil || name == nil) {
+        return;
+    }
+    if (_LBSRegisteredServiceProviders == nil) {
+        _LBSRegisteredServiceProviders = [[NSMutableArray alloc] init];
+    }
+    NSInteger index = _LBSIndexForProviderName(name);
+    if (index >= 0) {
+        /* Re-registration under the same name swaps the host in place. */
+        ((_LBSRegisteredServiceProvider *)[_LBSRegisteredServiceProviders objectAtIndex:index])->_provider = provider;
+        return;
+    }
+    _LBSRegisteredServiceProvider *entry = [[_LBSRegisteredServiceProvider alloc] init];
+    entry->_provider = provider;
+    entry->_name = [name copy];
+    [_LBSRegisteredServiceProviders addObject:entry];
 }
 
 void NSUnregisterServicesProvider(NSServiceProviderName name)
 {
-    /* FIXME(macos). */
+    NSInteger index = _LBSIndexForProviderName(name);
+    if (index >= 0) {
+        [_LBSRegisteredServiceProviders removeObjectAtIndex:index];
+    }
 }
