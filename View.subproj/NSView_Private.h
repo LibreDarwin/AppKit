@@ -26,35 +26,26 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSGraphics.h — minimal seed for LibreDarwin's AppKit reimplementation.
- * Only the pieces the rest of the framework needs on day one are here (see
- * NSBeep, used by NSResponder's noResponderFor:, and NSWindowOrderingMode,
- * used by NSView's addSubview:positioned:relativeTo:). The drawing/text
- * primitives (NSRect/NSGraphicsContext drawing, NSColor, fonts) grow with
- * Drawing.subproj. */
-#ifndef _NSGRAPHICS_H
-#define _NSGRAPHICS_H
+/* NSView_Private.h — private companion to NSView.h. Declares the hooks
+ * AppKit's own classes (NSWindow in particular) use to bind a view to a
+ * window as the hierarchy is assembled. Not part of the public API and
+ * therefore excluded from the generated umbrella header; the one selector
+ * below still counts against the pairing sweep. */
+#ifndef _NSVIEW_PRIVATE_H
+#define _NSVIEW_PRIVATE_H
 
-#include <AppKit/AppKitDefines.h>
-#include <Foundation/NSObjCRuntime.h>
+#import <AppKit/NSView.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+@class NSWindow;
 
-/* Plays the system alert ("beep") sound. */
-APPKIT_EXTERN void NSBeep(void);
+@interface NSView (LBSViewPrivate)
 
-/* Ways to order a window (or, for NSView, a subview) relative to the
- * windows/views around it. Matches the values Apple's AppKit uses. */
-typedef NS_ENUM(NSInteger, NSWindowOrderingMode) {
-    NSWindowAbove = 1,
-    NSWindowBelow = -1,
-    NSWindowOut = 0
-};
+/* Rebinds the receiving view's window slot — and, recursively, that of
+ * every subview — to the given window. Sends viewWillMoveToWindow: and
+ * viewDidMoveToWindow: around the change. A no-op when the view is already
+ * bound to that window. */
+- (void)_lbsSetInWindow:(nullable NSWindow *)window;
 
-#ifdef __cplusplus
-}
-#endif
+@end
 
-#endif /* _NSGRAPHICS_H */
+#endif /* _NSVIEW_PRIVATE_H */
