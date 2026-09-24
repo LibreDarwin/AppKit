@@ -313,15 +313,41 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
+    /* Only key-command events are routed through the menu bar; any other event
+     * type is a no-op, matching Apple's entry check. */
+    if ([event type] != NSEventTypeKeyDown) {
+        return NO;
+    }
     if (_autoenablesItems) {
         [self update];
     }
+    return [self _LDPerformKeyEquivalentWithDelegate:event];
+}
 
-    NSEventModifierFlags flags = [event modifierFlags];
+- (BOOL)_LDPerformKeyEquivalentWithDelegate:(NSEvent *)event {
+    /* The delegate gets the first shot at the keystroke, mirroring Apple's
+     * -_performKeyEquivalentWithDelegate:. The modern
+     * menuHasKeyEquivalent:forEvent:target:action: hands back a target/action
+     * pair that we dispatch; a plain YES with no action claims the key, so the
+     * menu tree stops looking but performs nothing. */
+    id target = nil;
+    SEL action = NULL;
+    if (_delegate != nil &&
+        [_delegate respondsToSelector:@selector(menuHasKeyEquivalent:forEvent:target:action:)]) {
+        if ([_delegate menuHasKeyEquivalent:self forEvent:event target:&target action:&action]) {
+            if (action != NULL && target != nil) {
+                return _LDMenuSendAction(action, target, self);
+            }
+            return YES;
+        }
+    }
+
     NSString *characters = [event charactersIgnoringModifiers];
     if (characters == nil) {
         return NO;
     }
+
+    NSEventModifierFlags flags = [event modifierFlags];
 
     /* Pass 1: an item that hosts a submenu lets that submenu try first, so a
      * shortcut on a deeper item beats one on the item that owns the submenu.
@@ -332,7 +358,8 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
         if ([item isHidden] || ![item isEnabled]) {
             continue;
         }
-        if ([item submenu] != nil && [[item submenu] performKeyEquivalent:event]) {
+        if ([item submenu] != nil &&
+            [[item submenu] _LDPerformKeyEquivalentWithDelegate:event]) {
             return YES;
         }
     }
@@ -377,24 +404,29 @@ static BOOL _LDMenuKeyEquivalentMatches(NSString *characters, NSString *keyEquiv
     return strcasecmp([characters UTF8String], [keyEquivalent UTF8String]) == 0;
 }
 
-static BOOL _LDMenuExecuteItem(NSMenuItem *item) {
-    SEL action = [item action];
+/* Dispatch to an arbitrary target/action pair, falling back to the
+ * application unless the target already carries the selector. Returns whether
+ * someone actually performed it. */
+static BOOL _LDMenuSendAction(SEL action, id target, id sender) {
     if (action == NULL) {
         return NO;
     }
-    id target = [item target];
     /* objc_msgSend with a typed cast avoids the ARC unknown-selector leak
      * warning; the receiver is always an object. */
     void (*sendAction)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
     if (target != nil && [target respondsToSelector:action]) {
-        sendAction(target, action, item);
+        sendAction(target, action, sender);
         return YES;
     }
     if ([NSApp respondsToSelector:action]) {
-        sendAction(NSApp, action, item);
+        sendAction(NSApp, action, sender);
         return YES;
     }
     return NO;
+}
+
+static BOOL _LDMenuExecuteItem(NSMenuItem *item) {
+    return _LDMenuSendAction([item action], [item target], item);
 }
 
 - (void)itemChanged:(NSMenuItem *)item {
