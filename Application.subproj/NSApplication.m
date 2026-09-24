@@ -41,6 +41,7 @@
 #import <AppKit/NSApplication_Private.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSGraphics.h>
+#import <AppKit/NSMenu.h>
 #import <AppKit/NSPasteboard.h>
 #import <AppKit/NSPrintInfo.h>
 #import <AppKit/NSWindow.h>
@@ -53,6 +54,7 @@
 #import <Foundation/NSNotificationCenter.h>
 #import <Foundation/NSNumber.h>
 #import <Foundation/NSObjCRuntime.h>
+#import <Foundation/NSPathUtilities.h>
 #import <Foundation/NSRunLoop.h>
 #import <Foundation/NSThread.h>
 #import <Foundation/NSURL.h>
@@ -555,8 +557,6 @@ static NSDate *LBSAppKitFarFuture(void)
 
 - (NSMenu *)mainMenu
 {
-    /* FIXME(macos): construct the standard application menu structure
-     * (Apple, File, Edit, Window, Help) once Menu.subproj lands. */
     return _mainMenu;
 }
 
@@ -1061,8 +1061,8 @@ static NSDate *LBSAppKitFarFuture(void)
 {
     if (window != nil && ![_windows containsObject:window]) {
         [_windows addObject:window];
-        if (_windowsMenu != nil && [(id)_windowsMenu respondsToSelector:@selector(addItemWithTitle:action:keyEquivalent:)]) {
-            /* FIXME(macos): add a Window-menu row once Menu.subproj lands. */
+        if (_windowsMenu != nil && [[window title] length] > 0) {
+            [self addWindowsItem:window title:[window title] filename:NO];
         }
     }
 }
@@ -1337,22 +1337,88 @@ static NSDate *LBSAppKitFarFuture(void)
 
 - (void)removeWindowsItem:(NSWindow *)win
 {
-    /* FIXME(macos): Window-menu row maintenance awaits Menu.subproj. */
+    if (win == nil || _windowsMenu == nil) {
+        return;
+    }
+    NSInteger itemIndex = [_windowsMenu indexOfItemWithTarget:win andAction:@selector(makeKeyAndOrderFront:)];
+    if (itemIndex < 0) {
+        itemIndex = [_windowsMenu indexOfItemWithTarget:win andAction:@selector(deminiaturize:)];
+    }
+    if (itemIndex >= 0) {
+        [_windowsMenu removeItemAtIndex:itemIndex];
+    }
 }
 
 - (void)addWindowsItem:(NSWindow *)win title:(NSString *)string filename:(BOOL)isFilename
 {
-    /* FIXME(macos). */
+    if (win == nil || _windowsMenu == nil || [string length] == 0) {
+        return;
+    }
+    if ([_windowsMenu indexOfItemWithTarget:win andAction:@selector(makeKeyAndOrderFront:)] != -1) {
+        return;
+    }
+    if (isFilename) {
+        string = [NSString stringWithFormat:@"%@  --  %@",
+            [string lastPathComponent], [string stringByDeletingLastPathComponent]];
+    }
+    NSMenuItem *item = [_windowsMenu addItemWithTitle:string action:@selector(makeKeyAndOrderFront:) keyEquivalent:@""];
+    [item setTarget:win];
 }
 
 - (void)changeWindowsItem:(NSWindow *)win title:(NSString *)string filename:(BOOL)isFilename
 {
-    /* FIXME(macos). */
+    if (win == nil || _windowsMenu == nil) {
+        return;
+    }
+    if ([string length] == 0) {
+        /* Windows without a title are not represented in the Window menu. */
+        [self removeWindowsItem:win];
+        return;
+    }
+    NSInteger itemIndex = [_windowsMenu indexOfItemWithTarget:win andAction:@selector(makeKeyAndOrderFront:)];
+    if (itemIndex < 0) {
+        itemIndex = [_windowsMenu indexOfItemWithTarget:win andAction:@selector(deminiaturize:)];
+    }
+    if (itemIndex < 0) {
+        [self addWindowsItem:win title:string filename:isFilename];
+        return;
+    }
+    NSMenuItem *item = [_windowsMenu itemAtIndex:itemIndex];
+    if (isFilename) {
+        string = [NSString stringWithFormat:@"%@  --  %@",
+            [string lastPathComponent], [string stringByDeletingLastPathComponent]];
+    }
+    [item setTitle:string];
+    [_windowsMenu itemChanged:item];
 }
 
 - (void)updateWindowsItem:(NSWindow *)win
 {
-    /* FIXME(macos). */
+    if (win == nil || _windowsMenu == nil) {
+        return;
+    }
+    NSInteger itemIndex = [_windowsMenu indexOfItemWithTarget:win andAction:@selector(makeKeyAndOrderFront:)];
+    if (itemIndex < 0) {
+        itemIndex = [_windowsMenu indexOfItemWithTarget:win andAction:@selector(deminiaturize:)];
+    }
+    if (itemIndex < 0) {
+        return;
+    }
+    NSMenuItem *item = [_windowsMenu itemAtIndex:itemIndex];
+    if ([win isMiniaturized]) {
+        NSString *title = [item title];
+        if ([title length] == 0 || [title characterAtIndex:0] != '(') {
+            [item setTitle:[NSString stringWithFormat:@"(%@)", title]];
+        }
+        [item setTarget:win];
+        [item setAction:@selector(deminiaturize:)];
+    } else {
+        /* FIXME(macos): unwrap the parenthesized miniaturized title when a
+         * display-time title computation exists. */
+        [item setTarget:win];
+        [item setAction:@selector(makeKeyAndOrderFront:)];
+    }
+    [_windowsMenu itemChanged:item];
 }
 
 - (void)miniaturizeAll:(id)sender
