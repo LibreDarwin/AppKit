@@ -60,6 +60,11 @@
     CGFloat _deltaX;
     CGFloat _deltaY;
     CGFloat _deltaZ;
+    CGFloat _scrollingDeltaX;
+    CGFloat _scrollingDeltaY;
+    BOOL _hasPreciseScrollingDeltas;
+    NSEventPhase _phase;
+    NSEventPhase _momentumPhase;
     BOOL _directionInvertedFromDevice;
     NSInteger _data1;
     NSInteger _data2;
@@ -167,6 +172,36 @@
     return event;
 }
 
++ (NSEvent *)scrollWheelEventWithTimestamp:(NSTimeInterval)timestamp
+                                  location:(NSPoint)location
+                             modifierFlags:(NSEventModifierFlags)flags
+                                 timestamp:(NSTimeInterval)time
+                              windowNumber:(NSInteger)windowNum
+                                   context:(NSGraphicsContext *)context
+                                    deltaX:(CGFloat)deltaX
+                                    deltaY:(CGFloat)deltaY
+                                    deltaZ:(CGFloat)deltaZ
+{
+    (void)context;
+    (void)timestamp;
+    NSEvent *event = [NSEvent new];
+    event->_type = NSEventTypeScrollWheel;
+    event->_locationInWindow = location;
+    event->_modifierFlags = flags;
+    event->_timestamp = time;
+    event->_windowNumber = windowNum;
+    event->_deltaX = deltaX;
+    event->_deltaY = deltaY;
+    event->_deltaZ = deltaZ;
+    /* Pre-delta-names era behavior the factory signs up for: the line-based
+     * deltas ARE the scrolling deltas until a precise gesture supplies
+     * separate pixel deltas (which arrives with an input backend). */
+    event->_scrollingDeltaX = deltaX;
+    event->_scrollingDeltaY = deltaY;
+    event->_pressure = 1.0;
+    return event;
+}
+
 /* ----- accessors ------------------------------------------------------ */
 
 - (NSEventType)type {
@@ -239,6 +274,26 @@
 
 - (CGFloat)deltaZ {
     return _deltaZ;
+}
+
+- (CGFloat)scrollingDeltaX {
+    return _scrollingDeltaX;
+}
+
+- (CGFloat)scrollingDeltaY {
+    return _scrollingDeltaY;
+}
+
+- (BOOL)hasPreciseScrollingDeltas {
+    return _hasPreciseScrollingDeltas;
+}
+
+- (NSEventPhase)phase {
+    return _phase;
+}
+
+- (NSEventPhase)momentumPhase {
+    return _momentumPhase;
 }
 
 - (BOOL)isDirectionInvertedFromDevice {

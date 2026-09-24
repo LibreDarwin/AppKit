@@ -300,6 +300,18 @@ static const NSEventModifierFlags NSHelpKeyMask                         = NSEven
 static const NSEventModifierFlags NSFunctionKeyMask                     = NSEventModifierFlagFunction;
 static const NSEventModifierFlags NSDeviceIndependentModifierFlagsMask  = NSEventModifierFlagDeviceIndependentFlagsMask;
 
+/* Gesture momentum and scroll phases (macos 10.7); a bitmask so several can
+ * be reported at once. */
+typedef NS_OPTIONS(NSUInteger, NSEventPhase) {
+    NSEventPhaseNone        = 0x0,
+    NSEventPhaseBegan       = 0x1 << 0,
+    NSEventPhaseStationary  = 0x1 << 1,
+    NSEventPhaseChanged     = 0x1 << 2,
+    NSEventPhaseEnded       = 0x1 << 3,
+    NSEventPhaseCancelled   = 0x1 << 4,
+    NSEventPhaseMayBegin    = 0x1 << 5,
+};
+
 /* Event objects are created with the factory methods below, matching the
  * system AppKit. All accessors are plain stored values (there is no window
  * server or input backend yet), so the full mouse/key/other surface is
@@ -324,6 +336,11 @@ static const NSEventModifierFlags NSDeviceIndependentModifierFlagsMask  = NSEven
 @property (readonly) CGFloat deltaX;
 @property (readonly) CGFloat deltaY;
 @property (readonly) CGFloat deltaZ;
+@property (readonly) CGFloat scrollingDeltaX;
+@property (readonly) CGFloat scrollingDeltaY;
+@property (getter=hasPreciseScrollingDeltas, readonly) BOOL preciseScrollingDeltas;
+@property (readonly) NSEventPhase phase;
+@property (readonly) NSEventPhase momentumPhase;
 @property (readonly, getter=isDirectionInvertedFromDevice) BOOL directionInvertedFromDevice;
 @property (readonly) NSInteger data1;
 @property (readonly) NSInteger data2;
@@ -370,6 +387,16 @@ static const NSEventModifierFlags NSDeviceIndependentModifierFlagsMask  = NSEven
                         eventNumber:(NSInteger)eventNum
                      trackingNumber:(NSInteger)trackingNum
                            userData:(nullable void *)userData;
+
++ (NSEvent *)scrollWheelEventWithTimestamp:(NSTimeInterval)timestamp
+                                  location:(NSPoint)location
+                             modifierFlags:(NSEventModifierFlags)flags
+                                 timestamp:(NSTimeInterval)time
+                              windowNumber:(NSInteger)windowNum
+                                   context:(nullable NSGraphicsContext *)context
+                                    deltaX:(CGFloat)deltaX
+                                    deltaY:(CGFloat)deltaY
+                                    deltaZ:(CGFloat)deltaZ;
 
 @end
 
