@@ -29,6 +29,8 @@
 #import <AppKit/NSMenu.h>
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSEvent.h>
+#import <AppKit/NSFont.h>
+#import <AppKit/NSImage.h>
 #import <Foundation/NSArray.h>
 #import <Foundation/NSCoder.h>
 #import <Foundation/NSString.h>
@@ -469,12 +471,55 @@ static BOOL _LDMenuExecuteItem(NSMenuItem *item) {
     _minimumWidth = minimumWidth;
 }
 
+static CGFloat _LDEstimatedTextWidth(NSString *text, NSFont *font) {
+    if (text == nil || [text length] == 0) {
+        return 0;
+    }
+    return (CGFloat)[text length] * [font pointSize] * 0.5;
+}
+
 - (NSSize)size {
-    return NSMakeSize(0, 0);
+    NSFont *font = [self font];
+    CGFloat lineHeight = [font ascender] - [font descender];
+    CGFloat itemHeight = ceil(lineHeight) + 12;
+    CGFloat width = 0;
+    CGFloat height = 0;
+
+    NSInteger count = (NSInteger)[_itemArray count];
+    for (NSInteger i = 0; i < count; i++) {
+        NSMenuItem *item = [_itemArray objectAtIndex:i];
+        if ([item isSeparatorItem]) {
+            height += 9;
+            continue;
+        }
+        CGFloat itemWidth = (CGFloat)[item indentationLevel] * 14;
+        itemWidth += _LDEstimatedTextWidth([item title], font) + 24;
+        NSImage *image = [item image];
+        if (image != nil) {
+            itemWidth += [image size].width + 8;
+        }
+        NSString *keyEquivalent = [item keyEquivalent];
+        if (keyEquivalent != nil && [keyEquivalent length] > 0) {
+            itemWidth += _LDEstimatedTextWidth(keyEquivalent, font) + 32;
+        }
+        if ([item hasSubmenu]) {
+            itemWidth += 16;
+        }
+        if (itemWidth > width) {
+            width = itemWidth;
+        }
+        height += itemHeight;
+    }
+    if (_minimumWidth > 0 && width < _minimumWidth) {
+        width = _minimumWidth;
+    }
+    return NSMakeSize(ceil(width), ceil(height));
 }
 
 - (NSFont *)font {
-    return _font;
+    /* null_resettable: a cleared font falls back to the system font rather
+     * than nil, so menus always have a real face to lay out against. */
+    return _font != nil ? _font : [NSFont systemFontOfSize:[NSFont systemFontSize]];
 }
 
 - (void)setFont:(NSFont *)font {
