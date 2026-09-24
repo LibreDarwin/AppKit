@@ -26,17 +26,77 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* NSPasteboard.h — minimal seed for LibreDarwin's AppKit reimplementation.
- * The NSPasteboardType typedef is the only piece the rest of the framework
- * needs at compile time today; the NSPasteboard class grows with
- * Dragging.subproj. */
+/* NSPasteboard.h — clipboard interface for LibreDarwin's AppKit
+ * reimplementation. Storage is process-local for now (see NSPasteboard.m);
+ * the surface mirrors Apple's so a window-server-backed implementation can
+ * drop in later. */
+
 #ifndef _NSPASTEBOARD_H
 #define _NSPASTEBOARD_H
 
 #import <Foundation/NSObject.h>
+#import <Foundation/NSArray.h>
+#import <Foundation/NSData.h>
+#import <Foundation/NSString.h>
+#import <AppKit/AppKitDefines.h>
 
 typedef NSString * NSPasteboardType;
+typedef NSString * NSPasteboardName;
 
 @class NSPasteboard;
+
+/* Pasteboard names. The general, drag, find, font and ruler boards are the
+ * named boards AppKit itself queries. */
+APPKIT_EXTERN NSPasteboardName const NSPasteboardNameGeneral;
+APPKIT_EXTERN NSPasteboardName const NSPasteboardNameDrag;
+APPKIT_EXTERN NSPasteboardName const NSPasteboardNameFind;
+APPKIT_EXTERN NSPasteboardName const NSPasteboardNameFont;
+APPKIT_EXTERN NSPasteboardName const NSPasteboardNameRuler;
+
+/* Standard pasteboard types (UTI-backed, matching Apple's public values). */
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeString;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeRTF;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeRTFD;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeHTML;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeTabularText;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeTIFF;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypePNG;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypePDF;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeURL;
+APPKIT_EXTERN NSPasteboardType const NSPasteboardTypeFileURL;
+
+/* Implemented by declared owners of promised types on a pasteboard; every
+ * method is optional and consulted via -respondsToSelector:. */
+@protocol NSPasteboardOwner <NSObject>
+@optional
+/* Fill in data for a type promised via -declareTypes:owner:. */
+- (void)pasteboard:(NSPasteboard *)sender provideDataForType:(NSPasteboardType)type;
+/* Sent when another object declares over this owner's contents. */
+- (void)pasteboardChangedOwner:(NSPasteboard *)sender;
+@end
+
+@interface NSPasteboard : NSObject
+
++ (NSPasteboard *)generalPasteboard;
++ (NSPasteboard *)pasteboardWithName:(NSPasteboardName)name;
++ (NSPasteboard *)pasteboardWithUniqueName;
+
+- (NSInteger)changeCount;
+- (NSArray<NSPasteboardType> *)types;
+- (NSPasteboardType)availableTypeFromArray:(NSArray<NSPasteboardType> *)types;
+
+- (NSData *)dataForType:(NSPasteboardType)type;
+- (NSString *)stringForType:(NSPasteboardType)type;
+- (id)propertyListForType:(NSPasteboardType)type;
+
+- (NSInteger)clearContents;
+- (NSInteger)declareTypes:(NSArray<NSPasteboardType> *)newTypes owner:(id)owner;
+- (NSInteger)addTypes:(NSArray<NSPasteboardType> *)newTypes owner:(id)owner;
+
+- (BOOL)setData:(NSData *)data forType:(NSPasteboardType)type;
+- (BOOL)setString:(NSString *)string forType:(NSPasteboardType)type;
+- (BOOL)setPropertyList:(id)plist forType:(NSPasteboardType)type;
+
+@end
 
 #endif /* _NSPASTEBOARD_H */
