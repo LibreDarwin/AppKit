@@ -1108,6 +1108,14 @@ static NSDate *LBSAppKitFarFuture(void)
     _currentEvent = event;
 
     NSEventType type = [event type];
+
+    /* Menu key equivalents win over the responder chain, as on the system
+     * kit: a keyDown that matches a main-menu shortcut is consumed here so
+     * the responder chain and the "no responder" beep never see it. */
+    if (type == NSEventTypeKeyDown && [self _performKeyEquivalent:event]) {
+        return;
+    }
+
     SEL handler = _LBSEActionForEventType(type);
     if (handler == NULL) {
         /* AppKit/system/application-defined events are consumed by the
@@ -1124,6 +1132,24 @@ static NSDate *LBSAppKitFarFuture(void)
     } else {
         [self noResponderFor:handler];
     }
+}
+
+/* Menu key equivalents win over the responder chain: main menu first, then
+ * the key window's own menu when one is attached (the common case is the
+ * single shared main menu, so this covers keyboard shortcuts app-wide). */
+- (BOOL)_performKeyEquivalent:(NSEvent *)event
+{
+    NSMenu *menu = [self mainMenu];
+    if (menu != nil && [menu performKeyEquivalent:event]) {
+        return YES;
+    }
+    if (_keyWindow != nil &&
+        [(id)_keyWindow respondsToSelector:@selector(menu)] &&
+        [_keyWindow menu] != nil &&
+        [[_keyWindow menu] performKeyEquivalent:event]) {
+        return YES;
+    }
+    return NO;
 }
 
 - (void)postEvent:(NSEvent *)event atStart:(BOOL)atStart
