@@ -41,6 +41,7 @@
 #import <AppKit/NSApplication_Private.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSGraphics.h>
+#import <AppKit/NSImage.h>
 #import <AppKit/NSMenu.h>
 #import <AppKit/NSPasteboard.h>
 #import <AppKit/NSPrintInfo.h>
@@ -580,15 +581,11 @@ static NSDate *LBSAppKitFarFuture(void)
 - (NSImage *)applicationIconImage
 {
     if (_applicationIconImage == nil) {
-        /* FIXME(macos): NSImage.subproj provides the NSApplicationIcon
-         * image; until then, ask for it only if the class exists. */
-        Class imageClass = NSClassFromString(@"NSImage");
-        if (imageClass != Nil && [imageClass respondsToSelector:@selector(imageNamed:)]) {
-            id (*imageNamed)(Class, SEL, NSString *) = (id (*)(Class, SEL, NSString *))objc_msgSend;
-            id icon = imageNamed(imageClass, @selector(imageNamed:), @"NSApplicationIcon");
-            if (icon != nil) {
-                _cachedApplicationIcon = icon;
-            }
+        /* The named placeholder under the application-icon name serves until
+         * Image.subproj can surface system artwork. */
+        NSImage *icon = [NSImage imageNamed:NSImageNameApplicationIcon];
+        if (icon != nil) {
+            _cachedApplicationIcon = icon;
         }
         return _cachedApplicationIcon;
     }

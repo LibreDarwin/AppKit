@@ -46,8 +46,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface NSMenu : NSObject <NSCopying, NSCoding>
 
-- (instancetype)initWithTitle:(NSString *)title NS_DESIGNATED_INITIALIZER;
-- (instancetype)initWithCoder:(NSCoder *)coder NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithTitle:(NSString *)title;
+- (instancetype)initWithCoder:(NSCoder *)coder;
 - (instancetype)init NS_UNAVAILABLE;
 
 @property (copy) NSString *title;

@@ -32,6 +32,7 @@
 #import <Foundation/NSArray.h>
 #import <Foundation/NSCoder.h>
 #import <Foundation/NSString.h>
+#import <objc/message.h>
 #import <string.h>
 
 /* Equality is spelled textually: the minimal Foundation's NSString exposes
@@ -327,10 +328,13 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
     SEL action = [item action];
     id target = [item target];
     if (action != NULL) {
+        /* objc_msgSend with a typed cast avoids the ARC unknown-selector
+         * leak warning; the receiver is always an object. */
+        void (*sendAction)(id, SEL, id) = (void (*)(id, SEL, id))objc_msgSend;
         if (target != nil && [target respondsToSelector:action]) {
-            [target performSelector:action withObject:item];
+            sendAction(target, action, item);
         } else if ([NSApp respondsToSelector:action]) {
-            [NSApp performSelector:action withObject:item];
+            sendAction(NSApp, action, item);
         }
     }
 }
