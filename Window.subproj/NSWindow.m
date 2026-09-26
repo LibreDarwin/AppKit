@@ -114,6 +114,16 @@ static SEL LBSWindowActionForEventType(NSEventType type)
     }
 }
 
+/* Pointing and scrolling events are located in the window and hit-test into
+ * the content view hierarchy; only genuine keyboard events hold no location
+ * and must go to the first responder. */
+static BOOL LBSWindowEventIsKeyboardType(NSEventType type)
+{
+    return (type == NSEventTypeKeyDown ||
+            type == NSEventTypeKeyUp ||
+            type == NSEventTypeFlagsChanged);
+}
+
 @interface NSWindow () {
     NSRect _frame;
     NSWindowStyleMask _styleMask;
@@ -612,15 +622,29 @@ static SEL LBSWindowActionForEventType(NSEventType type)
     if (event == nil) {
         return;
     }
-    SEL handler = LBSWindowActionForEventType([event type]);
+    NSEventType type = [event type];
+    SEL handler = LBSWindowActionForEventType(type);
     if (handler == NULL) {
         /* AppKit/system/application-defined events are consumed elsewhere. */
         return;
     }
     NSResponder *target = [self firstResponder];
-    if ([target respondsToSelector:handler]) {
-        [target tryToPerform:handler with:event];
-    } else {
+    if (!LBSWindowEventIsKeyboardType(type)) {
+        /* Mouse/scroll/gesture events carry a location: hit-test the content
+         * view so the deepest view under the pointer handles the event, and
+         * the responder chain climbs to the window when views decline. */
+        NSView *content = _contentView;
+        if (content != nil) {
+            NSPoint windowPoint = [event locationInWindow];
+            NSPoint localPoint = NSMakePoint(windowPoint.x - [content frame].origin.x,
+                                             windowPoint.y - [content frame].origin.y);
+            NSView *hit = [content hitTest:localPoint];
+            if (hit != nil) {
+                target = hit;
+            }
+        }
+    }
+    if (![target tryToPerform:handler with:event]) {
         [target noResponderFor:handler];
     }
 }

@@ -208,7 +208,7 @@
 - (void)_reallyTerminate;
 - (void)_postTerminationMarker;
 - (NSEvent *)_nextQueuedEventMatchingMask:(NSEventMask)mask inMode:(NSRunLoopMode)mode dequeue:(BOOL)deqFlag;
-- (id)_eventTargetForType:(NSEventType)type;
+- (NSWindow *)_eventWindowForEvent:(NSEvent *)event;
 - (void)_openURLs:(NSArray<NSURL *> *)urls;
 - (void)_openFiles:(NSArray<NSString *> *)filenames;
 - (BOOL)_delegateApplicationShouldOpenUntitledFile;
@@ -950,21 +950,20 @@ static NSDate *LBSAppKitFarFuture(void)
 
 /* The responder that receives events today is the key window's first
  * responder, else the key window itself, else the application. */
-- (id)_eventTargetForType:(NSEventType)type
+- (NSWindow *)_eventWindowForEvent:(NSEvent *)event
 {
-    NSWindow *window = _keyWindow;
+    NSEventType type = [event type];
+    NSWindow *window = nil;
+    if (type != NSEventTypeKeyDown && type != NSEventTypeKeyUp && type != NSEventTypeFlagsChanged) {
+        /* Located events go to the window that owns them, wherever it sits.
+         * Keyboard events carry no location and target the key window. */
+        window = [event window];
+    }
+    if (window == nil) {
+        window = _keyWindow;
+    }
     if (window == nil) {
         window = _mainWindow;
-    }
-    if (window == nil) {
-        return self;
-    }
-    if ([(id)window respondsToSelector:@selector(firstResponder)]) {
-        id (*getFirstResponder)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
-        id firstResponder = getFirstResponder(window, @selector(firstResponder));
-        if (firstResponder != nil) {
-            return firstResponder;
-        }
     }
     return window;
 }
@@ -1126,13 +1125,16 @@ static NSDate *LBSAppKitFarFuture(void)
         return;
     }
 
-    NSResponder *target = (NSResponder *)[self _eventTargetForType:type];
-    if (target == nil) {
-        target = self;
+    /* Hand each located event to its own window (falling back to the key,
+     * then the main window), which hit-tests the pointer and climbs the
+     * responder chain. With no window at all, the application itself plays
+     * responder. */
+    NSWindow *window = [self _eventWindowForEvent:event];
+    if (window != nil) {
+        [window sendEvent:event];
+        return;
     }
-    if ([target respondsToSelector:handler]) {
-        [target tryToPerform:handler with:event];
-    } else {
+    if (![self tryToPerform:handler with:event]) {
         [self noResponderFor:handler];
     }
 }

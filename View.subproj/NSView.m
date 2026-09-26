@@ -87,6 +87,17 @@
     return _window;
 }
 
+- (NSResponder *)nextResponder
+{
+    /* The responder chain runs up through the superview hierarchy and out
+     * the window, matching Apple: an unhandled event in a deep view climbs
+     * until someone handles it or the window hands it to the application. */
+    if (_superview != nil) {
+        return _superview;
+    }
+    return (NSResponder *)_window;
+}
+
 - (NSView *)superview
 {
     return _superview;
