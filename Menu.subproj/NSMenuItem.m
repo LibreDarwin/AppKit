@@ -104,7 +104,15 @@
 }
 
 - (void)setSubmenu:(NSMenu *)submenu {
-    _submenu = submenu;
+    if (_submenu != submenu) {
+        if (_submenu != nil) {
+            [_submenu setSupermenu:nil];
+        }
+        _submenu = submenu;
+        if (_submenu != nil) {
+            [_submenu setSupermenu:_menu];
+        }
+    }
 }
 
 - (NSMenuItem *)parentItem {

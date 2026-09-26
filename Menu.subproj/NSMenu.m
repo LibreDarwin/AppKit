@@ -143,6 +143,10 @@ static void _LDMenuClearTargets(NSMenu *menu) {
         return;
     }
     [newItem setMenu:self];
+    NSMenu *attachedSubmenu = [newItem submenu];
+    if (attachedSubmenu != nil) {
+        [attachedSubmenu setSupermenu:self];
+    }
     NSInteger count = (NSInteger)[_itemArray count];
     if (index < 0) {
         index = 0;
@@ -170,6 +174,10 @@ static void _LDMenuClearTargets(NSMenu *menu) {
         return;
     }
     [newItem setMenu:self];
+    NSMenu *attachedSubmenu = [newItem submenu];
+    if (attachedSubmenu != nil) {
+        [attachedSubmenu setSupermenu:self];
+    }
     [_itemArray addObject:newItem];
 }
 
@@ -189,7 +197,11 @@ static void _LDMenuClearTargets(NSMenu *menu) {
     if (index < 0 || index >= (NSInteger)[_itemArray count]) {
         return;
     }
-    [[_itemArray objectAtIndex:index] setMenu:nil];
+    NSMenuItem *item = [_itemArray objectAtIndex:index];
+    [item setMenu:nil];
+    if ([item submenu] != nil) {
+        [[item submenu] setSupermenu:nil];
+    }
     [_itemArray removeObjectAtIndex:index];
 }
 
