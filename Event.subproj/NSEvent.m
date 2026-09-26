@@ -39,6 +39,7 @@
  * NSApplication's termination marker). */
 
 #import <AppKit/NSEvent.h>
+#import <AppKit/NSApplication.h>
 #import <Foundation/NSString.h>
 
 @implementation NSEvent {
@@ -209,7 +210,14 @@
 }
 
 - (NSWindow *)window {
-    return _window;
+    /* Stored events arrive from the factories with only a window number;
+     * back-reference it through the shared application's window list, which
+     * is where windows register on creation. Unknown numbers (closed or
+     * off-window) resolve to nil exactly as the window server would. */
+    if (_windowNumber <= 0) {
+        return nil;
+    }
+    return [[NSApplication sharedApplication] windowWithWindowNumber:_windowNumber];
 }
 
 - (NSInteger)windowNumber {
