@@ -53,6 +53,7 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
     NSFont *_font;
     BOOL _allowsContextMenuPlugIns;
     NSUserInterfaceLayoutDirection _userInterfaceLayoutDirection;
+    BOOL _updating;
 }
 
 + (void)popUpContextMenu:(NSMenu *)menu withEvent:(NSEvent *)event forView:(NSView *)view {
@@ -309,9 +310,40 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
 }
 
 - (void)update {
+    if (_updating) {
+        return;
+    }
+    _updating = YES;
+    if (_autoenablesItems) {
+        NSInteger count = (NSInteger)[_itemArray count];
+        for (NSInteger i = 0; i < count; i++) {
+            NSMenuItem *item = [_itemArray objectAtIndex:i];
+            if ([item isSeparatorItem] || [item isSectionHeader]) {
+                [item setEnabled:YES];
+                continue;
+            }
+            if ([item hasSubmenu]) {
+                /* Submenu owners stay live so the bar can open them; their own
+                 * items validate when the submenu itself updates. */
+                [item setEnabled:YES];
+                continue;
+            }
+            SEL action = [item action];
+            if (action == NULL) {
+                [item setEnabled:NO];
+                continue;
+            }
+            if ([[item target] respondsToSelector:action] || [NSApp respondsToSelector:action]) {
+                [item setEnabled:YES];
+            } else {
+                [item setEnabled:NO];
+            }
+        }
+    }
     if (_delegate && [_delegate respondsToSelector:@selector(menuNeedsUpdate:)]) {
         [_delegate menuNeedsUpdate:self];
     }
+    _updating = NO;
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
@@ -432,6 +464,12 @@ static BOOL _LDMenuExecuteItem(NSMenuItem *item) {
 }
 
 - (void)itemChanged:(NSMenuItem *)item {
+    /* An item's appearance can flip its validity; re-run autoenabling rather
+     * than trusting a stale enabled state. update's re-entry guard means menu
+     * edits from menuNeedsUpdate: will not re-trigger a pass. */
+    if (_autoenablesItems) {
+        [self update];
+    }
 }
 
 - (void)performActionForItemAtIndex:(NSInteger)index {

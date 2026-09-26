@@ -48,6 +48,7 @@ typedef NS_ENUM(NSInteger, NSControlStateValue) {
 @interface NSMenuItem : NSObject <NSCopying, NSValidatedUserInterfaceItem>
 
 + (NSMenuItem *)separatorItem;
++ (instancetype)sectionHeaderWithTitle:(NSString *)title;
 
 - (instancetype)initWithTitle:(NSString *)title action:(nullable SEL)action keyEquivalent:(NSString *)keyEquivalent;
 - (instancetype)init NS_UNAVAILABLE;

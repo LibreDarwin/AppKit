@@ -51,6 +51,8 @@
     NSImage *_onStateImage;
     NSImage *_offStateImage;
     NSImage *_mixedStateImage;
+    BOOL _alternate;
+    BOOL _sectionHeader;
 }
 
 + (NSMenuItem *)separatorItem {
@@ -61,6 +63,7 @@
 
 + (instancetype)sectionHeaderWithTitle:(NSString *)title {
     NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:NULL keyEquivalent:@""];
+    item->_sectionHeader = YES;
     return item;
 }
 
@@ -114,6 +117,9 @@
 
 - (void)setTitle:(NSString *)title {
     _title = [title copy];
+    if (_menu != nil) {
+        [_menu itemChanged:self];
+    }
 }
 
 - (NSAttributedString *)attributedTitle {
@@ -137,7 +143,7 @@
 }
 
 - (BOOL)isSectionHeader {
-    return NO;
+    return _sectionHeader;
 }
 
 - (NSString *)keyEquivalent {
@@ -162,6 +168,9 @@
 
 - (void)setImage:(NSImage *)image {
     _image = image;
+    if (_menu != nil) {
+        [_menu itemChanged:self];
+    }
 }
 
 - (NSControlStateValue)state {
@@ -205,10 +214,11 @@
 }
 
 - (BOOL)isAlternate {
-    return NO;
+    return _alternate;
 }
 
 - (void)setAlternate:(BOOL)alternate {
+    _alternate = alternate;
 }
 
 - (NSInteger)indentationLevel {
