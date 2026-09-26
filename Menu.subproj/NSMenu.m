@@ -42,6 +42,7 @@
  * -length/-characterAtIndex:/-UTF8String but no -isEqualToString:. Only the
  * declared surface of this project's Foundation is used. */
 static BOOL _LDStringsEqual(NSString *left, NSString *right);
+static void _LDMenuClearTargets(NSMenu *menu);
 
 @implementation NSMenu {
     NSMenu *_supermenu;
@@ -96,7 +97,25 @@ static BOOL _LDStringsEqual(NSString *left, NSString *right);
     for (NSInteger i = 0; i < count; i++) {
         [copy addItem:[[_itemArray objectAtIndex:i] copyWithZone:zone]];
     }
+    /* Apple's documented menu-copy rule: every copied item — including those
+     * nested in copied submenus — comes out with a nil target, so a copied
+     * menu never performs actions against the original's controller. */
+    _LDMenuClearTargets(copy);
     return copy;
+}
+
+static void _LDMenuClearTargets(NSMenu *menu) {
+    NSInteger count = [menu numberOfItems];
+    for (NSInteger i = 0; i < count; i++) {
+        NSMenuItem *item = [menu itemAtIndex:i];
+        if (item == nil) {
+            continue;
+        }
+        [item setTarget:nil];
+        if ([item submenu] != nil) {
+            _LDMenuClearTargets([item submenu]);
+        }
+    }
 }
 
 - (void)dealloc {

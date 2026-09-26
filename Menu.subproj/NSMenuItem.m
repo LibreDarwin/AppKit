@@ -282,6 +282,7 @@
 
 - (id)copyWithZone:(NSZone *)zone {
     NSMenuItem *copy = [[NSMenuItem allocWithZone:zone] initWithTitle:_title ? _title : @"" action:_action keyEquivalent:_keyEquivalent];
+    copy->_title = _title ? [_title copy] : nil;
     copy.attributedTitle = _attributedTitle;
     copy.subtitle = _subtitle;
     copy.keyEquivalentModifierMask = _keyEquivalentModifierMask;
@@ -296,7 +297,11 @@
     copy.tag = _tag;
     copy.representedObject = _representedObject;
     copy.hidden = _hidden;
-    copy.submenu = _submenu;
+    copy->_alternate = _alternate;
+    copy->_sectionHeader = _sectionHeader;
+    if (_submenu != nil) {
+        copy.submenu = [_submenu copy];
+    }
     return copy;
 }
 
