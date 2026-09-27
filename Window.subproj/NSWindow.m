@@ -33,12 +33,13 @@
  * hosting via the LBSViewPrivate hook, onscreen visibility flags, key/main
  * state transitions wired to NSApplication's registry through the
  * LBSWindowPrivate category, first-responder assignment, miniaturization
- * state, closing, and event dispatch into the responder chain. No
- * window-server connection, ordering, or backing surfaces yet — the display
- * subsystem owns those, and the ordering methods only track an onscreen
- * flag. The key/main transition pair follows Apple's contract: becoming key
- * or main resigns the previous holder, resigning clears the application's
- * pointer and posts the notification pair around each change.
+ * state, closing, and event dispatch into the responder chain, including the
+ * mouse tracking loop that keeps a button press, its drags, and its release
+ * together. No window-server connection, ordering, or backing surfaces yet —
+ * the display subsystem owns those, and the ordering methods only track an
+ * onscreen flag. The key/main transition pair follows Apple's contract:
+ * becoming key or main resigns the previous holder, resigning clears the
+ * application's pointer and posts the notification pair around each change.
  *
  * Written against the minimal LibreDarwin Foundation NSArray/NSGeometry
  * surface: no fast enumeration, no reverse enumerators. */
@@ -122,6 +123,36 @@ static BOOL LBSWindowEventIsKeyboardType(NSEventType type)
     return (type == NSEventTypeKeyDown ||
             type == NSEventTypeKeyUp ||
             type == NSEventTypeFlagsChanged);
+}
+
+/* A mouse button held down owns the event stream until it comes back up, so
+ * the events that continue a press are the drags of the same button plus that
+ * button's release (and, for a right-button drag, a control-click is already
+ * reported as a right drag). A second button pressed mid-drag belongs to the
+ * application, not to the loop that is already running. */
+static NSEventMask LBSWindowTrackingMaskForEventType(NSEventType type)
+{
+    switch (type) {
+        case NSEventTypeLeftMouseDown:
+            return NSLeftMouseDraggedMask | NSLeftMouseUpMask;
+        case NSEventTypeRightMouseDown:
+            return NSRightMouseDraggedMask | NSRightMouseUpMask;
+        case NSEventTypeOtherMouseDown:
+            return NSOtherMouseDraggedMask | NSOtherMouseUpMask;
+        default:
+            return 0;
+    }
+}
+
+/* The event that ends a tracking loop started by type. */
+static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
+{
+    switch (type) {
+        case NSEventTypeLeftMouseDown:      return @selector(mouseUp:);
+        case NSEventTypeRightMouseDown:     return @selector(rightMouseUp:);
+        case NSEventTypeOtherMouseDown:     return @selector(otherMouseUp:);
+        default:                            return NULL;
+    }
 }
 
 @interface NSWindow () {
@@ -644,8 +675,45 @@ static BOOL LBSWindowEventIsKeyboardType(NSEventType type)
             }
         }
     }
-    if (![target tryToPerform:handler with:event]) {
+    BOOL handled = [target tryToPerform:handler with:event];
+    if (!handled) {
         [target noResponderFor:handler];
+    }
+    /* A button press is not over: while it is held, its drags and its
+     * release belong to the responder the press went to, not to whatever
+     * happens to sit under the pointer later. */
+    [self _trackMouseEvent:event to:target];
+}
+
+/* Mouse tracking loop. The responder the press went to keeps receiving the
+ * drags of the same button, and the matching release closes the sequence.
+ * Everything else — a second button, a key press, a scroll, an event stamped
+ * for another window — is left queued for the application to dispatch once the
+ * loop returns. */
+- (void)_trackMouseEvent:(NSEvent *)press to:(NSResponder *)target
+{
+    NSEventType pressType = [press type];
+    NSEventMask mask = LBSWindowTrackingMaskForEventType(pressType);
+    if (mask == 0) {
+        return;
+    }
+    SEL endAction = LBSWindowTrackingEndActionForEventType(pressType);
+    NSApplication *app = [NSApplication sharedApplication];
+    for (;;) {
+        NSEvent *next = [app _lbsNextTrackingEventMatchingMask:mask inWindow:self];
+        if (next == nil) {
+            return;
+        }
+        SEL action = LBSWindowActionForEventType([next type]);
+        if (action == NULL) {
+            return;
+        }
+        /* A responder that declines a drag lets the chain above it try, just
+         * as it would for the press; the loop itself never beeps. */
+        [target tryToPerform:action with:next];
+        if (action == endAction) {
+            return;
+        }
     }
 }
 

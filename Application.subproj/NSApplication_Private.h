@@ -50,6 +50,14 @@
 - (void)_lbsSetMainWindow:(nullable NSWindow *)window;
 /* Records which window is the application's key window. */
 - (void)_lbsSetKeyWindow:(nullable NSWindow *)window;
+/* Dequeues the next already-queued event matching mask from the mode events
+ * are currently being pulled in and belonging to window (or carrying no
+ * window at all), or nil when the queue holds none. Unlike
+ * -nextEventMatchingMask:... this never waits, which is what a window's mouse
+ * tracking loop needs: it asks whether a drag continuation or the terminating
+ * mouse-up is pending and stops tracking as soon as the answer is no. */
+- (nullable NSEvent *)_lbsNextTrackingEventMatchingMask:(NSEventMask)mask
+                                               inWindow:(nullable NSWindow *)window;
 
 @end
 

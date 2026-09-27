@@ -434,6 +434,14 @@
     return NSPointInRect(point, rect);
 }
 
+/* Views take the click that lands on them even when their window is not key:
+ * the press belongs to whatever is under the pointer, and the window the
+ * click makes key is a consequence, not a precondition. */
+- (BOOL)acceptsFirstMouse:(NSEvent *)event
+{
+    return YES;
+}
+
 @end
 
 @implementation NSView (LBSViewPrivate)

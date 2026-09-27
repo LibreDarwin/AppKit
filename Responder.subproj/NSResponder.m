@@ -176,6 +176,14 @@
     return YES;
 }
 
+/* A click on an inactive window's view usually only activates the window; the
+ * view has to opt in to also taking the press. Plain responders, which have
+ * no content to act on, do not. */
+- (BOOL)acceptsFirstMouse:(NSEvent *)event
+{
+    return NO;
+}
+
 - (BOOL)resignFirstResponder
 {
     return YES;

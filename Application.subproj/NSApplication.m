@@ -1094,6 +1094,36 @@ static NSDate *LBSAppKitFarFuture(void)
     _keyWindow = window;
 }
 
+- (NSEvent *)_lbsNextTrackingEventMatchingMask:(NSEventMask)mask inWindow:(NSWindow *)window
+{
+    /* Only the queue is consulted: the window server that would block a real
+     * tracking loop does not exist yet, so a tracking loop is over as soon as
+     * no continuation of the drag is already queued. Events land in the mode
+     * the application is currently pulling in, so that is where we look. */
+    NSRunLoopMode mode = _eventMode != nil ? _eventMode : NSDefaultRunLoopMode;
+    for (NSUInteger i = 0; i < [_eventQueue count]; i++) {
+        NSEvent *event = [_eventQueue objectAtIndex:i];
+        if (CFStringCompare((CFStringRef)[_eventQueueModes objectAtIndex:i], (CFStringRef)mode, 0) != kCFCompareEqualTo) {
+            continue;
+        }
+        if ((mask & NSEventMaskFromType([event type])) == 0) {
+            continue;
+        }
+        /* An event stamped for a different window belongs to that window's
+         * own dispatch; an event with no window at all is untargeted and
+         * still part of the gesture. */
+        NSWindow *owner = [event window];
+        if (owner != nil && owner != window) {
+            continue;
+        }
+        [_eventQueue removeObjectAtIndex:i];
+        [_eventQueueModes removeObjectAtIndex:i];
+        _currentEvent = event;
+        return event;
+    }
+    return nil;
+}
+
 @end
 
 /* ------------------------------------------------------------------ */

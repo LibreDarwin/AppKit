@@ -93,6 +93,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) BOOL acceptsFirstResponder;
 - (BOOL)becomeFirstResponder;
 - (BOOL)resignFirstResponder;
+- (BOOL)acceptsFirstMouse:(nullable NSEvent *)event;
 - (void)interpretKeyEvents:(NSArray<NSEvent *> *)eventArray;
 - (void)flushBufferedKeyEvents;
 @property (nullable, strong) NSMenu *menu;
