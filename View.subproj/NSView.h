@@ -83,6 +83,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property BOOL autoresizesSubviews;
 @property NSAutoresizingMaskOptions autoresizingMask;
 
+/* Moves and resizes the receiver's subviews to suit a change in the receiver's
+ * own size, following the autoresizing mask of each subview: a flexible margin
+ * lets the gap beside it take up the change, a sizable edge stretches with it,
+ * and an edge with no flexibility stays where it is. oldFrameSize is the size
+ * the receiver had before the change. Called automatically when the receiver is
+ * resized and autoresizesSubviews is YES; override to lay subviews out yourself.
+ * (The system kit carries this work in -resizeSubviewsWithOldSize:.) */
+- (void)resizeSubviewsWithOldFrameSize:(NSSize)oldFrameSize;
+
 - (void)setFrameOrigin:(NSPoint)newOrigin;
 - (void)setFrameSize:(NSSize)newSize;
 @property NSRect frame;

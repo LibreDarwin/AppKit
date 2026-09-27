@@ -42,6 +42,7 @@
 
 #import <Foundation/NSArray.h>
 #import <Foundation/NSGeometry.h>
+#import <math.h>
 #import <AppKit/NSView.h>
 #import <AppKit/NSView_Private.h>
 #import <AppKit/NSWindow.h>
@@ -276,7 +277,14 @@
 
 - (void)setFrame:(NSRect)frameRect
 {
+    NSSize oldSize = _bounds.size;
     _frame = frameRect;
+    /* A view with no transform is exactly as big as its bounds, so resizing
+     * the frame resizes the view's own coordinate system along with it. */
+    _bounds.size = frameRect.size;
+    if (frameRect.size.width != oldSize.width || frameRect.size.height != oldSize.height) {
+        [self resizeSubviewsWithOldFrameSize:oldSize];
+    }
 }
 
 - (void)setFrameOrigin:(NSPoint)newOrigin
@@ -286,7 +294,9 @@
 
 - (void)setFrameSize:(NSSize)newSize
 {
-    _frame.size = newSize;
+    NSRect frameRect = _frame;
+    frameRect.size = newSize;
+    [self setFrame:frameRect];
 }
 
 - (NSRect)bounds
@@ -296,7 +306,8 @@
 
 - (void)setBounds:(NSRect)boundsRect
 {
-    _bounds = boundsRect;
+    [self setBoundsOrigin:boundsRect.origin];
+    [self setBoundsSize:boundsRect.size];
 }
 
 - (void)setBoundsOrigin:(NSPoint)newOrigin
@@ -304,9 +315,95 @@
     _bounds.origin = newOrigin;
 }
 
+/* The bounds are the view's own coordinate system, and its size is its own to
+ * choose: a view can lay itself out over a larger area than the frame it
+ * occupies, or clip a smaller one, without that changing where it sits in its
+ * superview or how big that superview's subviews are. Only a change to the
+ * frame resizes the view for real, so only that runs the autoresizing pass. */
 - (void)setBoundsSize:(NSSize)newSize
 {
     _bounds.size = newSize;
+}
+
+/* The autoresizing pass, one axis at a time. A view that changes size hands the
+ * size it used to have to -resizeSubviewsWithOldFrameSize:, which lays its
+ * subviews out again to suit the new size.
+ *
+ * Along one axis a subview is three pieces: the gap between the subview and the
+ * leading edge of its superview, the subview's own length, and the gap between
+ * its trailing edge and the superview's trailing edge. The change in the
+ * superview's length is shared out between those pieces in proportion to how
+ * large each one already is, and only the pieces the subview's mask calls
+ * flexible take part. That is why a flexible leading gap carries the subview
+ * along with the leading edge while a flexible trailing gap leaves it where it
+ * is and stretches it instead: both grow, but the trailing one grows into the
+ * subview rather than into the gap beside it. A subview with nothing flexible
+ * keeps its place and its length whatever happens to the superview.
+ *
+ * The share taken by the leading gap, and by the length when the trailing gap
+ * is flexible, lands on half points, as it does on the system kit, and whatever
+ * they do not use goes to the trailing gap, so the three pieces keep adding up
+ * to the new size. */
+static void LBShareAutoresizingAxis(CGFloat oldLead, CGFloat oldLength, CGFloat oldTrail,
+                                    CGFloat newParentLength,
+                                    BOOL flexLead, BOOL flexLength, BOOL flexTrail,
+                                    CGFloat *outLead, CGFloat *outLength)
+{
+    CGFloat lead = oldLead;
+    CGFloat length = oldLength;
+    CGFloat delta = newParentLength - (oldLead + oldLength + oldTrail);
+    CGFloat flexTotal = (flexLead ? oldLead : 0.0) + (flexLength ? oldLength : 0.0) + (flexTrail ? oldTrail : 0.0);
+    if (delta != 0.0 && flexTotal != 0.0) {
+        CGFloat leadShare = flexLead ? floor((delta * oldLead / flexTotal) * 2.0) * 0.5 : 0.0;
+        CGFloat lengthShare = flexLength ? floor((delta * oldLength / flexTotal) * 2.0) * 0.5 : 0.0;
+        if (!flexTrail) {
+            /* Nothing on the trailing side can take up what the leading gap
+             * and the length could not use exactly, so the subview stretches
+             * by it. When the trailing gap is flexible it simply ends up
+             * shorter or longer, being whatever is left of the new length. */
+            lengthShare = delta - leadShare;
+        }
+        lead += leadShare;
+        /* A view is never given a negative length, however hard its superview
+         * is squeezed. */
+        length = MAX((CGFloat)0.0, length + lengthShare);
+    }
+    *outLead = lead;
+    *outLength = length;
+}
+
+- (void)resizeSubviewsWithOldFrameSize:(NSSize)oldFrameSize
+{
+    if (!_autoresizesSubviews) {
+        return;
+    }
+    NSSize newSize = _bounds.size;
+    /* A subview is free to add or remove siblings while it is being resized,
+     * so walk a snapshot rather than the live array. */
+    NSArray<NSView *> *subviews = [_subviews copy];
+    for (NSView *subview in subviews) {
+        NSRect oldFrame = subview->_frame;
+        NSAutoresizingMaskOptions mask = subview->_autoresizingMask;
+        CGFloat lead = 0.0;
+        CGFloat length = 0.0;
+        LBShareAutoresizingAxis(oldFrame.origin.x, oldFrame.size.width,
+                                oldFrameSize.width - (oldFrame.origin.x + oldFrame.size.width),
+                                newSize.width,
+                                (mask & NSViewMinXMargin) != 0,
+                                (mask & NSViewWidthSizable) != 0,
+                                (mask & NSViewMaxXMargin) != 0,
+                                &lead, &length);
+        CGFloat bottom = 0.0;
+        CGFloat height = 0.0;
+        LBShareAutoresizingAxis(oldFrame.origin.y, oldFrame.size.height,
+                                oldFrameSize.height - (oldFrame.origin.y + oldFrame.size.height),
+                                newSize.height,
+                                (mask & NSViewMinYMargin) != 0,
+                                (mask & NSViewHeightSizable) != 0,
+                                (mask & NSViewMaxYMargin) != 0,
+                                &bottom, &height);
+        [subview setFrame:NSMakeRect(lead, bottom, length, height)];
+    }
 }
 
 - (BOOL)isFlipped
