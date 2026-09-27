@@ -44,6 +44,7 @@
 #import <Foundation/NSGeometry.h>
 #import <AppKit/NSView.h>
 #import <AppKit/NSView_Private.h>
+#import <AppKit/NSWindow.h>
 #import <AppKit/AppKitDefines.h>
 
 @interface NSView () {
@@ -70,7 +71,10 @@
 {
     if (self = [super init]) {
         _frame = frameRect;
-        _bounds = frameRect;
+        /* A view draws in its own coordinate system, which starts at the
+         * top left corner of its bounds; the frame is only where that system
+         * sits in the superview. */
+        _bounds = NSMakeRect(0.0, 0.0, frameRect.size.width, frameRect.size.height);
         _window = nil;
         _superview = nil;
         _subviews = nil;
@@ -308,6 +312,34 @@
 - (BOOL)isFlipped
 {
     return NO;
+}
+
+/* Nothing is opaque until a subclass says it paints its whole background; the
+ * drawing surface that could answer this properly lands with the display
+ * subsystem. */
+- (BOOL)isOpaque
+{
+    return NO;
+}
+
+- (BOOL)mouseDownCanMoveWindow
+{
+    return ![self isOpaque];
+}
+
+/* The default response to a press is to have the window move: on the system
+ * kit a click on the background of a window is a request to drag the window
+ * around, and a view that wants the press for itself overrides this. An
+ * invisible or fixed window is not draggable, so the press travels up the
+ * chain instead. */
+- (void)mouseDown:(NSEvent *)event
+{
+    NSWindow *window = [self window];
+    if (window != nil && [window isVisible] && [window isMovable] && [self mouseDownCanMoveWindow]) {
+        [window performWindowDragWithEvent:event];
+        return;
+    }
+    [super mouseDown:event];
 }
 
 - (NSPoint)convertPoint:(NSPoint)point fromView:(nullable NSView *)view

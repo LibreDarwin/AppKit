@@ -93,6 +93,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (getter=isFlipped, readonly) BOOL flipped;
 
+/* Whether the view paints every pixel of its bounds, which hides whatever is
+ * behind it. A view answers NO unless it draws an opaque background. */
+@property (getter=isOpaque, readonly) BOOL opaque;
+
+/* Whether a press on this view should drag the window it belongs to. The
+ * default answer is the view's opacity: a view that leaves its background
+ * showing lets the window be dragged by it, one that covers its bounds does
+ * not. */
+- (BOOL)mouseDownCanMoveWindow;
+
 - (NSPoint)convertPoint:(NSPoint)point fromView:(nullable NSView *)view;
 - (NSPoint)convertPoint:(NSPoint)point toView:(nullable NSView *)view;
 - (NSSize)convertSize:(NSSize)size fromView:(nullable NSView *)view;

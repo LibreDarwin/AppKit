@@ -168,6 +168,7 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
     BOOL _isMainWindow;
     BOOL _miniaturized;
     BOOL _opaque;
+    BOOL _movable;
     NSInteger _windowNumber;
 }
 
@@ -207,6 +208,7 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
         _isMainWindow = NO;
         _miniaturized = NO;
         _opaque = YES;
+        _movable = YES;
 
         _windowNumber = ++LBSWindowNumberSequence;
 
@@ -290,6 +292,16 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
     _frame.origin = newOrigin;
     [self _lbsRelayoutContent];
     [self _lbsNoteMove];
+}
+
+- (BOOL)isMovable
+{
+    return _movable;
+}
+
+- (void)setMovable:(BOOL)flag
+{
+    _movable = flag;
 }
 
 - (void)setFrameSize:(NSSize)newSize
@@ -714,6 +726,38 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
         if (action == endAction) {
             return;
         }
+    }
+}
+
+/* Window drag. The window follows the pointer from the point the press landed
+ * on until the button comes back up; the drags of the left button are the
+ * whole gesture, so nothing else is pulled out of the queue. Like the system's
+ * drag this announces the move once up front instead of once per pixel. */
+- (void)performWindowDragWithEvent:(NSEvent *)event
+{
+    NSPoint last = [event locationInWindow];
+    NSApplication *app = [NSApplication sharedApplication];
+    [[NSNotificationCenter defaultCenter] postNotificationName:NSWindowWillMoveNotification object:self];
+    BOOL moved = NO;
+    for (;;) {
+        NSEvent *next = [app _lbsNextTrackingEventMatchingMask:NSLeftMouseDraggedMask | NSLeftMouseUpMask
+                                                      inWindow:self];
+        if (next == nil || [next type] == NSEventTypeLeftMouseUp) {
+            break;
+        }
+        NSPoint now = [next locationInWindow];
+        if (now.x != last.x || now.y != last.y) {
+            NSPoint origin = _frame.origin;
+            origin.x += now.x - last.x;
+            origin.y += now.y - last.y;
+            _frame.origin = origin;
+            [self _lbsRelayoutContent];
+            last = now;
+            moved = YES;
+        }
+    }
+    if (moved) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:NSWindowDidMoveNotification object:self];
     }
 }
 

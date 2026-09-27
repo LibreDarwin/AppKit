@@ -138,6 +138,10 @@ typedef NS_ENUM(NSInteger, NSWindowLevel) {
 /* A Boolean value that indicates whether the window is onscreen. */
 @property (readonly, getter=isVisible) BOOL visible;
 
+/* Whether a click on the window's background may drag the window around.
+ * Windows are movable unless the application says otherwise. */
+@property (getter=isMovable) BOOL movable;
+
 /* Order the window to the front / back / offscreen. */
 - (void)orderFront:(nullable id)sender;
 - (void)orderBack:(nullable id)sender;
@@ -186,6 +190,11 @@ typedef NS_ENUM(NSInteger, NSWindowLevel) {
 
 /* Dispatches the event to the window's responder chain. */
 - (void)sendEvent:(NSEvent *)event;
+
+/* Moves the window for the duration of a mouse drag that started with event:
+ * the window follows the pointer from the point the press landed on until the
+ * button comes back up. */
+- (void)performWindowDragWithEvent:(NSEvent *)event;
 
 @property (getter=isOpaque) BOOL opaque;
 @property (nullable, weak) id<NSWindowDelegate> delegate;
