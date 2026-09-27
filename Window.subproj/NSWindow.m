@@ -68,9 +68,9 @@ NSNotificationName NSWindowDidMoveNotification = @"NSWindowDidMoveNotification";
 NSNotificationName NSWindowDidResizeNotification = @"NSWindowDidResizeNotification";
 NSNotificationName NSWindowDidExposeNotification = @"NSWindowDidExposeNotification";
 
-/* Height of the title bar added above the content area for titled windows.
- * The display subsystem will refine this with real metrics. */
-static const CGFloat LBSTitleBarHeight = 28.0;
+/* Height of the title bar added above the content area for titled windows, the
+ * same band the system kit leaves for it. */
+static const CGFloat LBSTitleBarHeight = 32.0;
 
 /* Monotonic window numbers, starting at 1 like the window server's. */
 static NSInteger LBSWindowNumberSequence = 0;
@@ -172,6 +172,7 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
     NSInteger _windowNumber;
 }
 
+- (NSRect)_lbsContentFrame;
 - (void)_lbsRelayoutContent;
 
 @end
@@ -212,7 +213,7 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
 
         _windowNumber = ++LBSWindowNumberSequence;
 
-        NSView *content = [[NSView alloc] initWithFrame:[self contentRectForFrameRect:_frame]];
+        NSView *content = [[NSView alloc] initWithFrame:[self _lbsContentFrame]];
         [content _lbsSetInWindow:self];
         _contentView = content;
 
@@ -237,11 +238,14 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
     return [NSWindow frameRectForContentRect:contentRect styleMask:_styleMask];
 }
 
+/* The title bar is a strip along the top of a window: in the default,
+ * bottom-left corner origin, the bar is the band of points above the content.
+ * So the two rects keep the same origin and differ only in height, which is why
+ * a window's content sits exactly where the window does. */
 + (NSRect)contentRectForFrameRect:(NSRect)frameRect styleMask:(NSWindowStyleMask)styleMask
 {
     NSRect rect = frameRect;
     if (styleMask & NSWindowStyleMaskTitled) {
-        rect.origin.y += LBSTitleBarHeight;
         rect.size.height -= LBSTitleBarHeight;
     }
     return rect;
@@ -251,7 +255,6 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
 {
     NSRect rect = contentRect;
     if (styleMask & NSWindowStyleMaskTitled) {
-        rect.origin.y -= LBSTitleBarHeight;
         rect.size.height += LBSTitleBarHeight;
     }
     return rect;
@@ -327,9 +330,19 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
     [[NSNotificationCenter defaultCenter] postNotificationName:NSWindowDidMoveNotification object:self];
 }
 
+/* Where the content view sits inside the window. A view's frame is measured in
+ * its superview's coordinates, and the content view's superview is the window,
+ * so the content starts at the window's own corner however far onto the screen
+ * the window itself has been placed. -contentRectForFrameRect: answers the
+ * same question in screen coordinates, for callers outside the window. */
+- (NSRect)_lbsContentFrame
+{
+    return NSMakeRect(0.0, 0.0, _frame.size.width, [self contentRectForFrameRect:_frame].size.height);
+}
+
 - (void)_lbsRelayoutContent
 {
-    [_contentView setFrame:[self contentRectForFrameRect:_frame]];
+    [_contentView setFrame:[self _lbsContentFrame]];
 }
 
 /* ------------------------------------------------------------------ */
@@ -350,7 +363,7 @@ static SEL LBSWindowTrackingEndActionForEventType(NSEventType type)
     _contentView = contentView;
     [contentView _lbsSetInWindow:self];
     if (contentView != nil) {
-        [contentView setFrame:[self contentRectForFrameRect:_frame]];
+        [contentView setFrame:[self _lbsContentFrame]];
     }
 }
 
