@@ -62,6 +62,9 @@
 # dev build against Apple's SDK.
 CC  ?= clang
 RN  = /Users/sunneva/xnuports-root/devel/xcode-tools/build/release/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.Internal.sdk
+# The Internal SDK carries only the frameworks the port replaces; CoreText
+# (which AppKit itself builds on) is still taken from the host Xcode SDK.
+XCSDK = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
 
 # ---- framework locations ----
 FW    = build/release/AppKit.framework
@@ -80,7 +83,8 @@ CFLAGS  = -fobjc-arc -fblocks -fobjc-runtime=macosx \
           -I build/gen
 LDFLAGS = -dynamiclib -fobjc-arc -isysroot ${RN} \
           -F${RN}/System/Library/Frameworks \
-          -framework Foundation -framework CoreFoundation \
+          -F${XCSDK}/System/Library/Frameworks \
+          -framework Foundation -framework CoreFoundation -framework CoreText \
           -install_name @rpath/AppKit.framework/Versions/A/AppKit
 
 # Sources written for MRC (they cast raw CF objects without __bridge).
@@ -108,18 +112,18 @@ pairing-sweep:
 umbrella:
 	@mkdir -p build/gen/AppKit
 	@if test -f build/gen/AppKit/AppKit.h; then \
-	    newer=$$(find . \( -path './build' -o -path './local' \) -prune -o -name '*.h' -type f -newer build/gen/AppKit/AppKit.h -print | sort); \
+	    newer=$$(find . \( -path './build' -o -path './local' -o -path './Tests' \) -prune -o -name '*.h' -type f -newer build/gen/AppKit/AppKit.h -print | sort); \
 	 else \
 	    newer=force; \
 	 fi; \
 	 if test -n "$$newer"; then \
 	    rm -f build/gen/AppKit/*.h; \
-	    for h in $$(find . \( -path './build' -o -path './local' \) -prune -o -name '*.h' -type f -print | sort); do \
+	    for h in $$(find . \( -path './build' -o -path './local' -o -path './Tests' \) -prune -o -name '*.h' -type f -print | sort); do \
 	        cp "$$h" build/gen/AppKit/; \
 	    done; \
 	    { \
 	        echo '// AppKit.h — generated from this project'"'"'s subproject headers'; \
-	        for h in $$(find . \( -path './build' -o -path './local' \) -prune -o -name '*.h' -type f -print | sort); do \
+	        for h in $$(find . \( -path './build' -o -path './local' -o -path './Tests' \) -prune -o -name '*.h' -type f -print | sort); do \
 	            hb="$${h##*/}"; \
 	            case "$$hb" in \
 	                *_Private.h|*_Internal.h|_*) ;; \
@@ -138,7 +142,7 @@ umbrella:
 # =====================================================================
 objects:
 	@mkdir -p build/objects
-	@for src in $$(find . \( -path './build' -o -path './local' \) -prune -o -name '*.m' -type f -print | sort); do \
+	@for src in $$(find . \( -path './build' -o -path './local' -o -path './Tests' \) -prune -o -name '*.m' -type f -print | sort); do \
 	    obj=build/objects/$${src#./}; \
 	    obj=$${obj%.m}.o; \
 	    mkdir -p $$(dirname "$$obj"); \
