@@ -68,6 +68,8 @@ extern const CFStringRef kCTFontNameAttribute;
 extern const CFStringRef kCTFontStyleNameAttribute;
 
 extern CTFontRef CTFontCreateWithName(CFStringRef name, double size, const void *matrix);
+extern CTFontRef CTFontCreateWithFontDescriptor(CTFontDescriptorRef descriptor, double size, const void *matrix);
+extern CTFontDescriptorRef CTFontCopyFontDescriptor(CTFontRef font);
 extern CFStringRef CTFontCopyFamilyName(CTFontRef font);
 extern CFDictionaryRef CTFontCopyTraits(CTFontRef font);
 extern CTFontRef CTFontCreateCopyWithSymbolicTraits(CTFontRef font, double size, const void *matrix,
@@ -623,6 +625,7 @@ static int weightClassFromStyleName(const char *styleName, double weight, int *f
     if (strcmp(styleName, "W8") == 0) return 10;
     if (strcmp(styleName, "W9") == 0) return 12;
     int q = (int)(weight * 10.0);
+    if (q == -6) { if (flagOut) *flagOut = 1; return 3; }
     if (q >= 8) return 14;
     if (q >= 3) return q + 5;
     if (q >= 1) return q + 4;
@@ -633,6 +636,9 @@ static int weightClassFromStyleName(const char *styleName, double weight, int *f
 }
 
 
+/* The member "traits" word AppKit's -[NSFontManager availableMembersOfFontFamily:]
+ * publishes: the low 16 bits are the CoreText symbolic traits and bit 16 is the
+ * out-flag from ___NSWeightFromStyle (set for thin faces). */
 /* The PostScript name a face falls back to once its bold and italic traits
  * are read off, using CoreText's own copy-with-traits the way AppKit's
  * -[NSFontManager convertFont:toNotHaveTrait:] does. */
@@ -645,6 +651,36 @@ static int getSym(CTFontRef f){
     if(t){CFNumberRef ns=(CFNumberRef)CFDictionaryGetValue(t,kCTFontSymbolicTrait);
         if(ns){SInt32 v=0;CFNumberGetValue(ns,kCFNumberSInt32Type,&v);s=v;}CFRelease(t);}return s;}
 
+static int memberTraits(CTFontRef f){
+    CFStringRef st=CTFontCopyAttribute(f,kCTFontStyleNameAttribute);
+    char *sc=st?copyCFString(st):NULL;int flag=0;
+    weightClassFromStyleName(sc,getWeight(f),&flag);
+    free(sc);if(st)CFRelease(st);
+    return (getSym(f)&0xffff)|(flag?0x10000:0);}
+
+/* -[NSFontManager availableMembersOfFontFamily:] keeps only the first CoreText
+ * descriptor seen for each style name, so PostScript aliases that share a style
+ * (FiraCodeRoman-*, FiraCodeNerdFontComplete*) are dropped. */
+static CFArrayRef copyUniqueMembers(CFArrayRef members){
+    if(!members)return NULL;
+    CFMutableArrayRef out=CFArrayCreateMutable(NULL,0,&kCFTypeArrayCallBacks);
+    CFMutableArrayRef styles=CFArrayCreateMutable(NULL,0,&kCFTypeArrayCallBacks);
+    if(!out||!styles){if(out)CFRelease(out);if(styles)CFRelease(styles);return NULL;}
+    CFIndex n=CFArrayGetCount(members);
+    for(CFIndex i=0;i<n;i++){
+        CTFontDescriptorRef md=(CTFontDescriptorRef)CFArrayGetValueAtIndex(members,i);
+        CFStringRef st=(CFStringRef)CTFontDescriptorCopyAttribute(md,kCTFontStyleNameAttribute);
+        if(!st)continue;
+        int dup=0;
+        for(CFIndex j=0,m=CFArrayGetCount(styles);j<m;j++){
+            if(CFEqual(CFArrayGetValueAtIndex(styles,j),st)){dup=1;break;}
+        }
+        if(!dup){CFArrayAppendValue(out,md);CFArrayAppendValue(styles,st);}
+        CFRelease(st);
+    }
+    CFRelease(styles);
+    return out;}
+
 static CFStringRef copyStrippedPostScriptName(CTFontRef font) {
     CFStringRef familyRef = CTFontCopyFamilyName(font);
     if (!familyRef) return CTFontCopyPostScriptName(font);
@@ -652,87 +688,80 @@ static CFStringRef copyStrippedPostScriptName(CTFontRef font) {
                                                  (const void **)&familyRef, 1,
                                                  &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     CTFontDescriptorRef desc = CTFontDescriptorCreateWithAttributes(famAttr);
-    CFArrayRef members = NULL;
+    CFArrayRef all = NULL;
     if (desc) {
-        members = CTFontDescriptorCreateMatchingFontDescriptors(desc, NULL);
+        all = CTFontDescriptorCreateMatchingFontDescriptors(desc, NULL);
         CFRelease(desc);
     }
     CFRelease(famAttr);
-    char *familyStr = copyCFString(familyRef);
     CFRelease(familyRef);
     CFStringRef resultName = NULL;
-    int targetSym = getSym(font);
-    int bo = targetSym & NX_CT_FONT_TRAIT_BOLD;
-    int it = targetSym & NX_CT_FONT_TRAIT_ITALIC;
+    CFArrayRef members = copyUniqueMembers(all);
+    if (all) CFRelease(all);
     if (members) {
-        double curW = getWeight(font);
-        int curSym = targetSym;
-        CTFontRef cur = (CTFontRef)CFRetain(font);
-        /* strip bold then italic (as before) but pick class-based member */
+        /* The traits AppKit publishes come from a font built from the member
+         * descriptor (fixed pitch and the other descriptor-only traits are
+         * lost when a face is rebuilt from its PostScript name). */
+        CTFontDescriptorRef fdesc = CTFontCopyFontDescriptor(font);
+        CTFontRef cur = fdesc ? CTFontCreateWithFontDescriptor(fdesc, 12.0, NULL)
+                              : (CTFontRef)CFRetain(font);
+        if (fdesc) CFRelease(fdesc);
+        if (!cur) cur = (CTFontRef)CFRetain(font);
+        int curSym = getSym(cur);
+        int curTraits = memberTraits(cur);
+        CFStringRef sref = CTFontCopyAttribute(cur, kCTFontStyleNameAttribute);
+        char *sstr = sref ? copyCFString(sref) : NULL;
+        if (sref) CFRelease(sref);
+        int curClass = weightClassFromStyleName(sstr, getWeight(cur), NULL);
+        free(sstr);
+        /* Strip bold then italic, matching -[NSFontManager convertFont:toNotHaveTrait:]:
+         * the replacement member shares the font's class when possible, otherwise
+         * the plain (class 5) member, else the first member with the wanted traits. */
         for (int pass = 0; pass < 2; pass++) {
             int mask = pass == 0 ? NX_CT_FONT_TRAIT_BOLD : NX_CT_FONT_TRAIT_ITALIC;
             if (!(curSym & mask)) continue;
-            CFStringRef styleRef = CTFontCopyAttribute(cur, kCTFontStyleNameAttribute);
-            char *styleStr = styleRef ? copyCFString(styleRef) : NULL;
-            if (styleRef) CFRelease(styleRef);
-            double w = getWeight(cur);
-            int C = weightClassFromStyleName(styleStr, w, NULL);
-            int flg = 0;
-            (void)weightClassFromStyleName(styleStr, w, &flg);
-            free(styleStr);
-            int best = -1, base = -1;
+            int want = curTraits & ~mask;
+            int best = -1, base = -1, first = -1;
             CFIndex n = CFArrayGetCount(members);
             for (CFIndex i = 0; i < n; i++) {
                 CTFontDescriptorRef md = (CTFontDescriptorRef)CFArrayGetValueAtIndex(members, i);
-                CFStringRef mps = (CFStringRef)CTFontDescriptorCopyAttribute(md, kCTFontNameAttribute);
-                CFStringRef mst = (CFStringRef)CTFontDescriptorCopyAttribute(md, kCTFontStyleNameAttribute);
-                char *mstc = mst ? copyCFString(mst) : NULL;
-                CTFontRef mf = mps ? CTFontCreateWithName(mps, 12.0, NULL) : NULL;
-                int msym = mf ? getSym(mf) : 0;
-                if (msym & mask) {
-                    if (mf) CFRelease(mf);
+                CTFontRef mf = CTFontCreateWithFontDescriptor(md, 12.0, NULL);
+                if (!mf) continue;
+                if (memberTraits(mf) == want) {
+                    CFStringRef mst = CTFontCopyAttribute(mf, kCTFontStyleNameAttribute);
+                    char *msc = mst ? copyCFString(mst) : NULL;
                     if (mst) CFRelease(mst);
-                    if (mps) CFRelease(mps);
-                    free(mstc);
-                    continue;
+                    int mc = weightClassFromStyleName(msc, getWeight(mf), NULL);
+                    free(msc);
+                    if (first < 0) first = (int)i;
+                    if (best < 0 && mc == curClass) best = (int)i;
+                    if (base < 0 && mc == 5) base = (int)i;
                 }
-                int mflag = 0;
-                int mcls = weightClassFromStyleName(mstc, mf ? getWeight(mf) : 0.0, &mflag);
-                if (mflag) {
-                    if (mf) CFRelease(mf);
-                    if (mst) CFRelease(mst);
-                    if (mps) CFRelease(mps);
-                    free(mstc);
-                    continue;
-                }
-                if (best < 0 && mcls == C) best = (int)i;
-                if (base < 0 && mcls == 5) base = (int)i;
-                if (mf) CFRelease(mf);
-                if (mst) CFRelease(mst);
-                if (mps) CFRelease(mps);
-                free(mstc);
+                CFRelease(mf);
             }
-            int pk = best >= 0 ? best : base;
+            int pk = best >= 0 ? best : (base >= 0 ? base : first);
             if (pk >= 0) {
                 CTFontDescriptorRef md = (CTFontDescriptorRef)CFArrayGetValueAtIndex(members, pk);
-                CFStringRef mps = (CFStringRef)CTFontDescriptorCopyAttribute(md, kCTFontNameAttribute);
-                CTFontRef nxt = CTFontCreateWithName(mps, 12.0, NULL);
-                if (mps) CFRelease(mps);
+                CTFontRef nxt = CTFontCreateWithFontDescriptor(md, 12.0, NULL);
                 if (nxt) {
                     CFRelease(cur);
                     cur = nxt;
                     curSym = getSym(cur);
-                    curW = getWeight(cur);
+                    curTraits = memberTraits(cur);
+                    CFStringRef sr = CTFontCopyAttribute(cur, kCTFontStyleNameAttribute);
+                    char *sc = sr ? copyCFString(sr) : NULL;
+                    if (sr) CFRelease(sr);
+                    curClass = weightClassFromStyleName(sc, getWeight(cur), NULL);
+                    free(sc);
                 }
             }
         }
         resultName = CTFontCopyPostScriptName(cur);
         CFRelease(cur);
+        CFRelease(members);
     } else {
         resultName = CTFontCopyPostScriptName(font);
     }
-    if (members) CFRelease(members);
-    free(familyStr);
     return resultName;
 }
 
@@ -769,7 +798,9 @@ char *NXFontNameForFontInDatabase(const NXFontDatabase *db, const char *postScri
             CFDictionaryCreate(NULL, (const void **)&key, (const void **)&familyRef, 1,
                                &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
         CTFontDescriptorRef descriptor = CTFontDescriptorCreateWithAttributes(query);
-        CFArrayRef members = CTFontDescriptorCreateMatchingFontDescriptors(descriptor, NULL);
+        CFArrayRef allMembers = CTFontDescriptorCreateMatchingFontDescriptors(descriptor, NULL);
+        CFArrayRef members = copyUniqueMembers(allMembers);
+        if (allMembers) CFRelease(allMembers);
         if (members) {
             for (CFIndex i = 0; i < CFArrayGetCount(members); i++) {
                 CTFontDescriptorRef member = (CTFontDescriptorRef)CFArrayGetValueAtIndex(members, i);
