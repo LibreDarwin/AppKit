@@ -4,3 +4,4 @@ local/
 *.o
 *.tmp
 
+Tests/__pycache__/
