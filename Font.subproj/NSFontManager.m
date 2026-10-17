@@ -143,6 +143,39 @@ static NSString *NSStringFromC(const char *s) {
     return font;
 }
 
+- (nullable NSString *)fontNameWithFamily:(NSString *)family traits:(NSFontTraitMask)traits weight:(NSInteger)weight {
+    if (!family) return nil;
+    NXFontMemberInfo *members = NULL;
+    size_t count = NXFontMembersOfFamily([family UTF8String], &members);
+    if (count == 0 || !members) {
+        NXFontMembersFree(members, count);
+        return nil;
+    }
+    int bestIdx = -1;
+    int bestScore = -1;
+    for (size_t i = 0; i < count; i++) {
+        NXFontMemberInfo *m = &members[i];
+        if (strcmp(m->styleName, "Regular") == 0 && count > 1) {
+            continue;
+        }
+        if ((traits & ~m->traits) != 0) {
+            continue;
+        }
+        int dist = abs((int)weight - m->weight);
+        int score = (dist == 0) ? 1000 : (1000 - dist);
+        if (bestIdx == -1 || score > bestScore) {
+            bestIdx = (int)i;
+            bestScore = score;
+        }
+    }
+    if (bestIdx == -1) {
+        bestIdx = 0;
+    }
+    NSString *name = NSStringFromC(members[bestIdx].postScriptName);
+    NXFontMembersFree(members, count);
+    return name;
+}
+
 - (NSFontTraitMask)traitsOfFont:(NSFont *)fontObj {
     if (!fontObj) return 0;
     const char *name = [[fontObj fontName] UTF8String];

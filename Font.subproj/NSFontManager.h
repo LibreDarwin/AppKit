@@ -81,6 +81,7 @@ typedef NS_ENUM(NSUInteger, NSFontAction) {
 - (nullable NSMenu *)fontMenu:(BOOL)create;
 - (nullable NSFontPanel *)fontPanel:(BOOL)create;
 - (nullable NSFont *)fontWithFamily:(NSString *)family traits:(NSFontTraitMask)traits weight:(NSInteger)weight size:(CGFloat)size;
+- (nullable NSString *)fontNameWithFamily:(NSString *)family traits:(NSFontTraitMask)traits weight:(NSInteger)weight;
 - (NSFontTraitMask)traitsOfFont:(NSFont *)fontObj;
 - (NSInteger)weightOfFont:(NSFont *)fontObj;
 
