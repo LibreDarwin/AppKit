@@ -841,3 +841,110 @@ char *NXFontNameForFontInDatabase(const NXFontDatabase *db, const char *postScri
 char *NXFontNameForFont(const char *postScriptName, int plainMode) {
     return NXFontNameForFontInDatabase(NULL, postScriptName, plainMode);
 }
+
+size_t NXFontMembersOfFamily(const char *family, NXFontMemberInfo **outMembers) {
+    if (!family || !outMembers) return 0;
+    CFStringRef familyRef = CFStringCreateWithCString(NULL, family, kCFStringEncodingUTF8);
+    if (!familyRef) return 0;
+    CFDictionaryRef query = CFDictionaryCreate(NULL, (const void **)&kCTFontFamilyNameAttribute,
+                                              (const void **)&familyRef, 1,
+                                              &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CTFontDescriptorRef desc = CTFontDescriptorCreateWithAttributes(query);
+    CFArrayRef all = desc ? CTFontDescriptorCreateMatchingFontDescriptors(desc, NULL) : NULL;
+    CFArrayRef members = copyUniqueMembers(all);
+    size_t count = 0;
+    NXFontMemberInfo *infos = NULL;
+    if (members) {
+        CFIndex n = CFArrayGetCount(members);
+        infos = calloc(n, sizeof(*infos));
+        count = 0;
+        for (CFIndex i = 0; i < n; i++) {
+            CTFontDescriptorRef md = (CTFontDescriptorRef)CFArrayGetValueAtIndex(members, i);
+            CFStringRef psRef = (CFStringRef)CTFontDescriptorCopyAttribute(md, kCTFontNameAttribute);
+            CFStringRef styleRef = (CFStringRef)CTFontDescriptorCopyAttribute(md, kCTFontStyleNameAttribute);
+            if (!psRef) continue;
+            char *ps = copyCFString(psRef);
+            char *style = styleRef ? copyCFString(styleRef) : strdup("");
+            CFRelease(psRef);
+            if (styleRef) CFRelease(styleRef);
+            if (!ps) { free(style); continue; }
+            CTFontRef f = CTFontCreateWithFontDescriptor(md, 12.0, NULL);
+            int weight = f ? (int)CTFontGetSize(f) ? 0 : 0 : 0; /* dummy to avoid unused in some cases? */
+            /* compute weight/tratis properly */
+            int traits = 0;
+            int weightClass = 5;
+            int thinFlag = 0;
+            if (f) {
+                CFStringRef s2 = CTFontCopyAttribute(f, kCTFontStyleNameAttribute);
+                char *sc = s2 ? copyCFString(s2) : NULL;
+                double w = getWeight(f);
+                weightClassFromStyleName(sc, w, &thinFlag);
+                free(sc);
+                if (s2) CFRelease(s2);
+                traits = memberTraits(f);
+                weightClass = weightClassFromStyleName(style, getWeight(f), &thinFlag);
+                CFRelease(f);
+            }
+            infos[count].postScriptName = ps;
+            infos[count].styleName = style;
+            infos[count].weight = weightClass;
+            infos[count].traits = traits;
+            count++;
+        }
+        CFRelease(members);
+    }
+    if (all) CFRelease(all);
+    if (desc) CFRelease(desc);
+    if (query) CFRelease(query);
+    CFRelease(familyRef);
+    *outMembers = infos;
+    return count;
+}
+
+void NXFontMembersFree(NXFontMemberInfo *members, size_t count) {
+    if (!members) return;
+    for (size_t i = 0; i < count; i++) {
+        free(members[i].postScriptName);
+        free(members[i].styleName);
+    }
+    free(members);
+}
+
+static CTFontRef fontRefForName(const char *postScriptName) {
+    if (!postScriptName) return NULL;
+    CFStringRef name = CFStringCreateWithCString(NULL, postScriptName, kCFStringEncodingUTF8);
+    if (!name) return NULL;
+    CTFontRef f = CTFontCreateWithName(name, 12.0, NULL);
+    CFRelease(name);
+    return f;
+}
+
+int NXFontSymbolicTraitsForName(const char *postScriptName) {
+    CTFontRef f = fontRefForName(postScriptName);
+    if (!f) return 0;
+    int sym = getSym(f) & 0xffff;
+    if (!(sym & 2)) {
+        CFStringRef s = CTFontCopyAttribute(f, kCTFontStyleNameAttribute);
+        char *sc = s ? copyCFString(s) : NULL;
+        int flag = 0;
+        weightClassFromStyleName(sc, getWeight(f), &flag);
+        free(sc);
+        if (s) CFRelease(s);
+        sym |= (flag ? 0x10000 : 0);
+    }
+    CFRelease(f);
+    return sym;
+}
+
+int NXFontWeightClassForName(const char *postScriptName) {
+    CTFontRef f = fontRefForName(postScriptName);
+    if (!f) return 5;
+    CFStringRef s = CTFontCopyAttribute(f, kCTFontStyleNameAttribute);
+    char *sc = s ? copyCFString(s) : NULL;
+    int flag = 0;
+    int w = weightClassFromStyleName(sc, getWeight(f), &flag);
+    free(sc);
+    if (s) CFRelease(s);
+    CFRelease(f);
+    return w;
+}

@@ -59,6 +59,14 @@ typedef struct NXFontFace {
     uint32_t faceIndex;     /* index within a collection, else 0 */
 } NXFontFace;
 
+/* AppKit-style member info: [postScriptName, styleName, weight, traits] */
+typedef struct NXFontMemberInfo {
+    char *postScriptName; /* element 0 */
+    char *styleName;      /* element 1 */
+    int   weight;         /* element 2 */
+    int   traits;         /* element 3 */
+} NXFontMemberInfo;
+
 typedef struct NXFontDatabase NXFontDatabase;
 
 /* Scans the standard font directories and returns a database, or NULL if
@@ -102,5 +110,13 @@ char *NXFontNameForFontInDatabase(const NXFontDatabase *db, const char *postScri
 
 /* The same, without a database. */
 char *NXFontNameForFont(const char *postScriptName, int plainMode);
+
+/* Members of family (AppKit-style). Free with NXFontMembersFree. */
+size_t NXFontMembersOfFamily(const char *family, NXFontMemberInfo **outMembers);
+void NXFontMembersFree(NXFontMemberInfo *members, size_t count);
+
+/* Query traits/weight for a PostScript name via CoreText. */
+int NXFontSymbolicTraitsForName(const char *postScriptName);
+int NXFontWeightClassForName(const char *postScriptName);
 
 #endif /* _NSFONTDATABASE_INTERNAL_H */
