@@ -34,8 +34,6 @@
 
 typedef id (*NSKeyBindingGetterFunction)(id, SEL, IMP);
 typedef void (*NSKeyBindingSetterFunction)(id, SEL, id, IMP);
-typedef id (*NSKVCPIvarGetterFunction)(id, long, NSString *);
-typedef void (*NSKVCPIvarSetterFunction)(id, id, long, NSString *);
 
 @interface _NSSelectorGetBinding : NSKeyGetBinding
 {
@@ -61,28 +59,6 @@ typedef void (*NSKVCPIvarSetterFunction)(id, id, long, NSString *);
     function:(void *)function
     implementation:(IMP)implementation
     selector:(SEL)selector;
-@end
-
-@interface _NSKVCPIvarGetBinding : NSKeyGetBinding
-{
-	long offset;
-	void *get;
-}
-- (instancetype)initWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)ivarOffset;
-@end
-
-@interface _NSKVCPIvarSetBinding : NSKeySetBinding
-{
-	long offset;
-	void *set;
-}
-- (instancetype)initWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)ivarOffset;
 @end
 
 @implementation NSKeyBinding
@@ -146,15 +122,6 @@ typedef void (*NSKVCPIvarSetterFunction)(id, id, long, NSString *);
 	    selector:selector]);
 }
 
-+ (instancetype)lbs_bindingWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)offset
-{
-	return ([[_NSKVCPIvarGetBinding alloc] initWithTargetClass:targetClass
-	    key:key function:function ivarOffset:offset]);
-}
-
 @end
 
 @implementation NSKeySetBinding
@@ -198,15 +165,6 @@ typedef void (*NSKVCPIvarSetterFunction)(id, id, long, NSString *);
 	return ([[_NSSelectorSetBinding alloc] initWithTargetClass:targetClass
 	    key:key function:function implementation:implementation
 	    selector:selector]);
-}
-
-+ (instancetype)lbs_bindingWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)offset
-{
-	return ([[_NSKVCPIvarSetBinding alloc] initWithTargetClass:targetClass
-	    key:key function:function ivarOffset:offset]);
 }
 
 @end
@@ -258,53 +216,6 @@ typedef void (*NSKVCPIvarSetterFunction)(id, id, long, NSString *);
 - (void)setValue:(id)value inObject:(id)object
 {
 	((NSKeyBindingSetterFunction)set)(object, setSel, value, setMethod);
-}
-
-@end
-
-@implementation _NSKVCPIvarGetBinding
-
-- (instancetype)initWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)ivarOffset
-{
-	if ((self = [super initWithTargetClass:targetClass key:key]) != nil) {
-		offset = ivarOffset;
-		get = function;
-	}
-	return (self);
-}
-
-- (id)getValueFromObject:(id)object
-{
-	return (((NSKVCPIvarGetterFunction)get)(object, offset, [self key]));
-}
-
-@end
-
-@implementation _NSKVCPIvarSetBinding
-
-- (instancetype)initWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)ivarOffset
-{
-	if ((self = [super initWithTargetClass:targetClass key:key]) != nil) {
-		offset = ivarOffset;
-		set = function;
-	}
-	return (self);
-}
-
-- (BOOL)isScalarProperty
-{
-	return (NO);
-}
-
-- (void)setValue:(id)value inObject:(id)object
-{
-	((NSKVCPIvarSetterFunction)set)(object, value, offset, [self key]);
 }
 
 @end

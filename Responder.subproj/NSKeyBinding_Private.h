@@ -45,11 +45,6 @@
     implementation:(IMP)implementation
     selector:(SEL)selector;
 
-+ (instancetype)lbs_bindingWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)offset;
-
 @end
 
 @interface NSKeySetBinding (LBSPrivate)
@@ -59,11 +54,6 @@
     function:(void *)function
     implementation:(IMP)implementation
     selector:(SEL)selector;
-
-+ (instancetype)lbs_bindingWithTargetClass:(Class)targetClass
-    key:(NSString *)key
-    function:(void *)function
-    ivarOffset:(long)offset;
 
 @end
 
